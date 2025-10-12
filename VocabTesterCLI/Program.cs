@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 class Program
 {
@@ -32,7 +33,6 @@ class Program
     static void Main()
     {
         var rng = new Random();
-        // Each word starts needing English, then needs French, then is eliminated
         var remaining = Vocab.ToDictionary(v => v, v => QuizState.NeedEnglish);
 
         PrintBanner();
@@ -101,6 +101,7 @@ class Program
                     // Ask for French meaning (free text input)
                     Console.ForegroundColor = ConsoleColor.Cyan;
                     Console.WriteLine($"\n🌟 Type the French for \"{key.English}\"! 🌟");
+                    PrintAccentInstructionsIfNeeded(key.French);
                     Console.ResetColor();
                     Console.ForegroundColor = ConsoleColor.Magenta;
                     Console.Write("Your answer: ");
@@ -141,11 +142,9 @@ class Program
                 var state = remaining[kvp];
                 if (!wrongSet.Contains((kvp.French, kvp.English, state)))
                 {
-                    // If not wrong, but not yet eliminated, keep in remaining
                     if (state == QuizState.NeedEnglish || state == QuizState.NeedFrench)
                         continue;
                 }
-                // If wrong, keep for next round
             }
             remaining = remaining
                 .Where(kvp => wrongSet.Contains((kvp.Key.French, kvp.Key.English, kvp.Value)) || kvp.Value == QuizState.NeedFrench || kvp.Value == QuizState.NeedEnglish)
@@ -157,6 +156,39 @@ class Program
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
+    }
+
+    static void PrintAccentInstructionsIfNeeded(string french)
+    {
+        // List of common French accented characters, including circumflex o
+        var accents = new Dictionary<char, string>
+        {
+            { 'é', "é: Alt+NumPad 0233" },
+            { 'è', "è: Alt+NumPad 0232" },
+            { 'ê', "ê: Alt+NumPad 0234" },
+            { 'ë', "ë: Alt+NumPad 0235" },
+            { 'à', "à: Alt+NumPad 0224" },
+            { 'â', "â: Alt+NumPad 0226" },
+            { 'î', "î: Alt+NumPad 0238" },
+            { 'ï', "ï: Alt+NumPad 0239" },
+            { 'ô', "ô: Alt+NumPad 0244" },
+            { 'ù', "ù: Alt+NumPad 0249" },
+            { 'û', "û: Alt+NumPad 0251" },
+            { 'ü', "ü: Alt+NumPad 0252" },
+            { 'ç', "ç: Alt+NumPad 0231" },
+        };
+
+        var found = accents.Keys.Where(french.Contains).ToList();
+        if (found.Count > 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Tip: This answer contains special French characters!");
+            foreach (var ch in found)
+            {
+                Console.WriteLine($"  - To type '{ch}' on Windows: {accents[ch]}");
+            }
+            Console.ResetColor();
+        }
     }
 
     static void PrintBanner()
