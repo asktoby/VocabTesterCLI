@@ -58,37 +58,39 @@ class Program
         Console.OutputEncoding = Encoding.UTF8;
         var rng = new Random();
 
-        // Build all possible sentences from the sentence builder parts
-        var sentences = new List<(string French, string English)>();
-        foreach (var subj in Subjects)
-        foreach (var noun in Nouns)
-        foreach (var adj in Adjectives)
+        // Build all possible sentences and keep component indices so we can craft similar distractors
+        var sentences = new List<(string French, string English, int subjIdx, int nounIdx, int adjIdx)>();
+        for (int si = 0; si < Subjects.Length; si++)
         {
-            // French sentence
-            string french;
-                  if (!noun.IsPlural)
-                french = $"{subj.French} {noun.French} parce que c'est {adj.French}";
-            else
+            for (int ni = 0; ni < Nouns.Length; ni++)
             {
-                var pron = noun.Gender == 'f' ? "parce qu'elles sont" : "parce qu'ils sont";
-                french = $"{subj.French} {noun.French} {pron} {adj.French}";
+                for (int ai = 0; ai < Adjectives.Length; ai++)
+                {
+                    var subj = Subjects[si];
+                    var noun = Nouns[ni];
+                    var adj = Adjectives[ai];
+
+                    string french;
+                    if (!noun.IsPlural)
+                        french = $"{subj.French} {noun.French} parce que c'est {adj.French}";
+                    else
+                    {
+                        var pron = noun.Gender == 'f' ? "parce qu'elles sont" : "parce qu'ils sont";
+                        french = $"{subj.French} {noun.French} {pron} {adj.French}";
+                    }
+
+                    string becauseClause = (!noun.IsPlural) ? $"because it is {adj.English}" : $"because they are {adj.English}";
+                    var english = $"{subj.English} {noun.English} {becauseClause}";
+
+                    sentences.Add((french, english, si, ni, ai));
+                }
             }
-
-            // English sentence
-            string englishSubject = subj.English;
-            string englishNoun = noun.English;
-            string becauseClause = (!noun.IsPlural) ? $"because it is {adj.English}" : $"because they are {adj.English}";
-            var english = $"{englishSubject} {englishNoun} {becauseClause}";
-
-            sentences.Add((French: french, English: english));
         }
 
-        // We'll quiz on a subset to keep the session reasonable. Pick a shuffled subset (e.g., 20).
-        sentences = sentences.OrderBy(_ => rng.Next()).Take(20).ToList();
-
-        // remaining to learn (mutated immediately when answered correctly)
-        var remaining = sentences.ToList();
-        var totalSentences = remaining.Count;
+        // Quiz subset
+        var quiz = sentences.OrderBy(_ => rng.Next()).Take(20).ToList();
+        var remaining = quiz.Select(s => s).ToList();
+        var total = remaining.Count;
 
         Console.WriteLine();
         PrintBanner();
@@ -99,19 +101,7 @@ class Program
 
             foreach (var item in roundOrder)
             {
-                // build choices (one correct + 3 distractors)
-                var choices = new HashSet<string> { item.English };
-                while (choices.Count < 4)
-                {
-                    var subj = Subjects[rng.Next(Subjects.Length)].English;
-                    var noun = Nouns[rng.Next(Nouns.Length)].English;
-                    var adj = Adjectives[rng.Next(Adjectives.Length)].English;
-                    var distractor = $"{subj} {noun} {(noun.EndsWith("s") ? "because they are" : "because it is")} {adj}";
-                    if (distractor != item.English)
-                        choices.Add(distractor);
-                }
-
-                var choiceList = choices.OrderBy(_ => rng.Next()).ToList();
+                var choiceList = BuildSimilarChoices(item, rng);
 
                 Console.ForegroundColor = ConsoleColor.Cyan;
                 Console.WriteLine($"\nTranslate into English:\n  {item.French}");
@@ -140,7 +130,6 @@ class Program
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine("Correct!\n");
                     Console.ResetColor();
-                    // immediately mark as learned by removing from remaining
                     remaining.Remove(item);
                 }
                 else
@@ -148,12 +137,10 @@ class Program
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"Wrong — correct: {item.English}\n");
                     Console.ResetColor();
-                    // leave in remaining (so it will be asked again)
                 }
 
-                // show progress after each question
-                var learned = totalSentences - remaining.Count;
-                DrawProgressBar(learned, totalSentences, 30);
+                var learned = total - remaining.Count;
+                DrawProgressBar(learned, total, 30);
             }
 
             if (remaining.Count > 0)
@@ -171,6 +158,120 @@ class Program
         Console.ReadKey();
     }
 
+    // Builds 4 choices that are deliberately similar:
+    // - pick one component to vary (subject, noun or adjective)
+    // - keep the other two components identical for all options
+    // If the chosen component doesn't have enough alternatives, choose a different component.
+    static List<string> BuildSimilarChoices((string French, string English, int subjIdx, int nounIdx, int adjIdx) item, Random rng)
+    {
+        var correct = item.English;
+        var choices = new HashSet<string> { correct };
+
+        // candidate component order to attempt (randomized)
+        var attempts = new[] { 0, 1, 2 }.OrderBy(_ => rng.Next()).ToList();
+        // 0 = vary adjective, 1 = vary noun, 2 = vary subject
+
+        foreach (var attempt in attempts)
+        {
+            if (choices.Count >= 4) break;
+
+            if (attempt == 0)
+            {
+                // vary adjective: keep subjIdx & nounIdx fixed
+                var pool = Enumerable.Range(0, Adjectives.Length).Where(ai => ai != item.adjIdx).ToList();
+                if (pool.Count >= 3) // enough alternatives
+                {
+                    var picks = pool.OrderBy(_ => rng.Next()).Take(3).ToList();
+                    foreach (var ai in picks)
+                        choices.Add(FormatEnglish(item.subjIdx, item.nounIdx, ai));
+                }
+            }
+            else if (attempt == 1)
+            {
+                // vary noun: keep subjIdx & adjIdx fixed; require same plurality so "it/they" matches
+                var pool = Enumerable.Range(0, Nouns.Length)
+                    .Where(ni => ni != item.nounIdx && Nouns[ni].IsPlural == Nouns[item.nounIdx].IsPlural)
+                    .ToList();
+                if (pool.Count >= 3)
+                {
+                    var picks = pool.OrderBy(_ => rng.Next()).Take(3).ToList();
+                    foreach (var ni in picks)
+                        choices.Add(FormatEnglish(item.subjIdx, ni, item.adjIdx));
+                }
+                else if (pool.Count > 0)
+                {
+                    // add whatever we can from pool to make distractors closer, we'll fill later
+                    foreach (var ni in pool.OrderBy(_ => rng.Next()))
+                    {
+                        if (choices.Count >= 4) break;
+                        choices.Add(FormatEnglish(item.subjIdx, ni, item.adjIdx));
+                    }
+                }
+            }
+            else // attempt == 2
+            {
+                // vary subject: keep nounIdx & adjIdx fixed; prefer same polarity group
+                var positive = new[] { 0, 1, 2 }; // indices of positive subjects
+                var negative = new[] { 3, 4 };
+                var subjGroup = positive.Contains(item.subjIdx) ? positive : negative;
+                var pool = subjGroup.Where(si => si != item.subjIdx).ToList();
+                if (pool.Count >= 3)
+                {
+                    foreach (var si in pool.OrderBy(_ => rng.Next()).Take(3))
+                        choices.Add(FormatEnglish(si, item.nounIdx, item.adjIdx));
+                }
+                else if (pool.Count > 0)
+                {
+                    foreach (var si in pool.OrderBy(_ => rng.Next()))
+                    {
+                        if (choices.Count >= 4) break;
+                        choices.Add(FormatEnglish(si, item.nounIdx, item.adjIdx));
+                    }
+                }
+            }
+        }
+
+        // If we still don't have 4 choices, fill with constrained random candidates
+        var fillAttempts = 0;
+        while (choices.Count < 4 && fillAttempts < 50)
+        {
+            fillAttempts++;
+            // prefer changing only one component relative to correct: randomly pick which to change
+            var comp = rng.Next(3);
+            int si = item.subjIdx, ni = item.nounIdx, ai = item.adjIdx;
+            if (comp == 0) ai = rng.Next(Adjectives.Length);
+            else if (comp == 1)
+            {
+                // choose noun with same plurality
+                var pool = Enumerable.Range(0, Nouns.Length).Where(i => Nouns[i].IsPlural == Nouns[item.nounIdx].IsPlural).ToList();
+                ni = pool[rng.Next(pool.Count)];
+            }
+            else
+            {
+                // choose subject from same polarity group if possible
+                var positive = new[] { 0, 1, 2 };
+                var negative = new[] { 3, 4 };
+                var group = positive.Contains(item.subjIdx) ? positive : negative;
+                si = group.OrderBy(_ => rng.Next()).First();
+            }
+
+            var candidate = FormatEnglish(si, ni, ai);
+            if (candidate != correct) choices.Add(candidate);
+        }
+
+        // Final shuffle and return
+        return choices.OrderBy(_ => rng.Next()).ToList();
+    }
+
+    static string FormatEnglish(int subjIdx, int nounIdx, int adjIdx)
+    {
+        var subj = Subjects[subjIdx].English;
+        var noun = Nouns[nounIdx];
+        var adj = Adjectives[adjIdx].English;
+        var because = noun.IsPlural ? "because they are" : "because it is";
+        return $"{subj} {noun.English} {because} {adj}";
+    }
+
     static void DrawProgressBar(int learned, int total, int width)
     {
         if (total <= 0) return;
@@ -181,7 +282,7 @@ class Program
         Console.ForegroundColor = ConsoleColor.Green;
         Console.Write("Progress: ");
         Console.ResetColor();
-        Console.Write("[", filled, width);
+        Console.Write("[");
         Console.ForegroundColor = ConsoleColor.Green;
         Console.Write(bar);
         Console.ResetColor();
