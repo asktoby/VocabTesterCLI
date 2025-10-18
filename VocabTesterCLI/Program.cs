@@ -1,204 +1,200 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
+using System.Text;
 
 class Program
 {
-    static readonly (string French, string English)[] Vocab = new[]
+    record Noun(string French, string English, char Gender, bool IsPlural);
+
+    static readonly Noun[] Nouns = new[]
     {
-        ("le café", "coffee"),
-        ("le chocolat", "chocolate"),
-        ("le fromage", "cheese"),
-        ("le jus de fruits", "fruit juice"),
-        ("le lait", "milk"),
-        ("le miel", "honey"),
-        ("le pain", "bread"),
-        ("le poisson", "fish"),
-        ("le poulet rôti", "roast chicken"),
-        ("le riz", "rice"),
-        ("l'eau", "water"),
-        ("la confiture", "jam"),
-        ("la salade verte", "green salad"),
-        ("la viande", "meat"),
-        ("les aliments", "food"),
-        ("sucrés", "sweet"),
-        ("épicés", "spicy"),
-        ("gras", "fatty"),
-        ("riches en protéines", "rich in protein"),
+        new Noun("le café", "coffee", 'm', false),
+        new Noun("le chocolat", "chocolate", 'm', false),
+        new Noun("le fromage", "cheese", 'm', false),
+        new Noun("le jus de fruits", "fruit juice", 'm', false),
+        new Noun("le lait", "milk", 'm', false),
+        new Noun("le miel", "honey", 'm', false),
+        new Noun("le pain", "bread", 'm', false),
+        new Noun("le poisson", "fish", 'm', false),
+        new Noun("le poulet rôti", "roast chicken", 'm', false),
+        new Noun("le riz", "rice", 'm', false),
+        new Noun("l'eau", "water", 'f', false),
+        new Noun("la confiture", "jam", 'f', false),
+        new Noun("la salade verte", "green salad", 'f', false),
+        new Noun("la viande", "meat", 'f', false),
+        new Noun("les aliments", "food", 'm', true),
+        new Noun("les frites", "fries", 'f', true),
+        new Noun("les bananes", "bananas", 'f', true),
+        new Noun("les pommes", "apples", 'f', true),
+        new Noun("les tomates", "tomatoes", 'f', true),
+        new Noun("les crevettes", "prawns", 'f', true),
     };
 
-    enum QuizState { NeedEnglish, NeedFrench }
+    static readonly (string French, string English)[] Subjects =
+    {
+        ("J'adore", "I love"),
+        ("J'aime", "I like"),
+        ("Je préfère", "I prefer"),
+        ("Je n'aime pas", "I don't like"),
+        ("Je déteste", "I hate")
+    };
+
+    static readonly (string French, string English)[] Adjectives =
+    {
+        ("délicieux", "delicious"),
+        ("savoureux", "tasty"),
+        ("sain", "healthy"),
+        ("dégoûtant", "disgusting"),
+        ("malsain", "unhealthy"),
+        ("sucré", "sweet"),
+        ("gras", "fatty"),
+        ("épicé", "spicy"),
+        ("riche en protéines", "rich in protein")
+    };
 
     static void Main()
     {
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        Console.OutputEncoding = Encoding.UTF8;
         var rng = new Random();
-        var remaining = Vocab.ToDictionary(v => v, v => QuizState.NeedEnglish);
 
+        // Build all possible sentences from the sentence builder parts
+        var sentences = new List<(string French, string English)>();
+        foreach (var subj in Subjects)
+        foreach (var noun in Nouns)
+        foreach (var adj in Adjectives)
+        {
+            // French sentence
+            string french;
+                  if (!noun.IsPlural)
+                french = $"{subj.French} {noun.French} parce que c'est {adj.French}";
+            else
+            {
+                var pron = noun.Gender == 'f' ? "parce qu'elles sont" : "parce qu'ils sont";
+                french = $"{subj.French} {noun.French} {pron} {adj.French}";
+            }
+
+            // English sentence
+            string englishSubject = subj.English;
+            string englishNoun = noun.English;
+            string becauseClause = (!noun.IsPlural) ? $"because it is {adj.English}" : $"because they are {adj.English}";
+            var english = $"{englishSubject} {englishNoun} {becauseClause}";
+
+            sentences.Add((French: french, English: english));
+        }
+
+        // We'll quiz on a subset to keep the session reasonable. Pick a shuffled subset (e.g., 20).
+        sentences = sentences.OrderBy(_ => rng.Next()).Take(20).ToList();
+
+        // remaining to learn (mutated immediately when answered correctly)
+        var remaining = sentences.ToList();
+        var totalSentences = remaining.Count;
+
+        Console.WriteLine();
         PrintBanner();
 
         while (remaining.Count > 0)
         {
-            var order = remaining.Keys.OrderBy(_ => rng.Next()).ToList();
-            var wrong = new List<(string French, string English, QuizState)>();
+            var roundOrder = remaining.OrderBy(_ => rng.Next()).ToList();
 
-            foreach (var key in order)
+            foreach (var item in roundOrder)
             {
-                var state = remaining[key];
-                bool correct = false;
-
-                if (state == QuizState.NeedEnglish)
+                // build choices (one correct + 3 distractors)
+                var choices = new HashSet<string> { item.English };
+                while (choices.Count < 4)
                 {
-                    // Ask for English meaning (multiple choice)
-                    var choices = Vocab.Select(v => v.English).Distinct().OrderBy(_ => rng.Next()).ToList();
-                    if (!choices.Contains(key.English))
-                        choices.Add(key.English);
-                    choices = choices.Where(c => c != key.English).Take(3).Append(key.English).OrderBy(_ => rng.Next()).ToList();
-
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"\n🌟 What is the English for \"{key.French}\"? 🌟");
-                    Console.ResetColor();
-                    for (int i = 0; i < choices.Count; i++)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.Write($" {i + 1}. ");
-                        Console.ResetColor();
-                        Console.WriteLine($"{choices[i]}");
-                    }
-
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.Write("Pick your answer (1-4): ");
-                    Console.ResetColor();
-                    var input = Console.ReadLine();
-                    int selected;
-                    if (!int.TryParse(input, out selected) || selected < 1 || selected > choices.Count)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("Oopsie! That's not a valid choice. Let's try again next time! 🐣");
-                        Console.ResetColor();
-                        wrong.Add((key.French, key.English, state));
-                        continue;
-                    }
-
-                    if (choices[selected - 1] == key.English)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("Yay! You got it right! 🎉✨");
-                        Console.ResetColor();
-                        correct = true;
-                    }
-                    else
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"Aww, not quite! The correct answer is \"{key.English}\". 🍬");
-                        Console.ResetColor();
-                        wrong.Add((key.French, key.English, state));
-                        continue;
-                    }
-                }
-                else if (state == QuizState.NeedFrench)
-                {
-                    // Ask for French meaning (free text input)
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"\n🌟 Type the French for \"{key.English}\"! 🌟");
-                    PrintAccentInstructionsIfNeeded(key.French);
-                    Console.ResetColor();
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.Write("Your answer: ");
-                    Console.ResetColor();
-                    var input = Console.ReadLine()?.Trim();
-
-                    if (string.Equals(input, key.French, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("Magnifique! You got the French right! 🥳🥐");
-                        Console.ResetColor();
-                        correct = true;
-                    }
-                    else
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"Aww, not quite! The correct answer is \"{key.French}\". 🍬");
-                        Console.ResetColor();
-                        wrong.Add((key.French, key.English, state));
-                        continue;
-                    }
+                    var subj = Subjects[rng.Next(Subjects.Length)].English;
+                    var noun = Nouns[rng.Next(Nouns.Length)].English;
+                    var adj = Adjectives[rng.Next(Adjectives.Length)].English;
+                    var distractor = $"{subj} {noun} {(noun.EndsWith("s") ? "because they are" : "because it is")} {adj}";
+                    if (distractor != item.English)
+                        choices.Add(distractor);
                 }
 
-                // If correct, update state or remove
-                if (correct)
+                var choiceList = choices.OrderBy(_ => rng.Next()).ToList();
+
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine($"\nTranslate into English:\n  {item.French}");
+                Console.ResetColor();
+
+                for (int i = 0; i < choiceList.Count; i++)
                 {
-                    if (state == QuizState.NeedEnglish)
-                        remaining[key] = QuizState.NeedFrench;
-                    else
-                        remaining.Remove(key);
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.Write($" {i + 1}. ");
+                    Console.ResetColor();
+                    Console.WriteLine(choiceList[i]);
                 }
+
+                Console.ForegroundColor = ConsoleColor.Magenta;
+                Console.Write("Pick your answer (1-4): ");
+                Console.ResetColor();
+                var input = Console.ReadLine();
+                if (!int.TryParse(input, out var selected) || selected < 1 || selected > choiceList.Count)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Invalid choice — counted as wrong.");
+                    Console.ResetColor();
+                }
+                else if (choiceList[selected - 1] == item.English)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("Correct!\n");
+                    Console.ResetColor();
+                    // immediately mark as learned by removing from remaining
+                    remaining.Remove(item);
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"Wrong — correct: {item.English}\n");
+                    Console.ResetColor();
+                    // leave in remaining (so it will be asked again)
+                }
+
+                // show progress after each question
+                var learned = totalSentences - remaining.Count;
+                DrawProgressBar(learned, totalSentences, 30);
             }
 
-            // Only keep wrong answers for next round
-            var wrongSet = new HashSet<(string French, string English, QuizState)>(wrong);
-            foreach (var kvp in remaining.Keys.ToList())
+            if (remaining.Count > 0)
             {
-                var state = remaining[kvp];
-                if (!wrongSet.Contains((kvp.French, kvp.English, state)))
-                {
-                    if (state == QuizState.NeedEnglish || state == QuizState.NeedFrench)
-                        continue;
-                }
+                Console.ForegroundColor = ConsoleColor.Blue;
+                Console.WriteLine($"\nNext round: {remaining.Count} sentence(s) to retry.\n");
+                Console.ResetColor();
             }
-            remaining = remaining
-                .Where(kvp => wrongSet.Contains((kvp.Key.French, kvp.Key.English, kvp.Value)) || kvp.Value == QuizState.NeedFrench || kvp.Value == QuizState.NeedEnglish)
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         }
 
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\n🌈 All words answered correctly both ways! You're a vocab superstar! 🦄✨");
+        Console.WriteLine("\nAll sentences translated correctly — well done!");
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
 
-    static void PrintAccentInstructionsIfNeeded(string french)
+    static void DrawProgressBar(int learned, int total, int width)
     {
-        // List of common French accented characters, including circumflex o
-        var accents = new Dictionary<char, string>
-        {
-            { 'é', "é: Alt+NumPad 0233" },
-            { 'è', "è: Alt+NumPad 0232" },
-            { 'ê', "ê: Alt+NumPad 0234" },
-            { 'ë', "ë: Alt+NumPad 0235" },
-            { 'à', "à: Alt+NumPad 0224" },
-            { 'â', "â: Alt+NumPad 0226" },
-            { 'î', "î: Alt+NumPad 0238" },
-            { 'ï', "ï: Alt+NumPad 0239" },
-            { 'ô', "ô: Alt+NumPad 0244" },
-            { 'ù', "ù: Alt+NumPad 0249" },
-            { 'û', "û: Alt+NumPad 0251" },
-            { 'ü', "ü: Alt+NumPad 0252" },
-            { 'ç', "ç: Alt+NumPad 0231" },
-        };
-
-        var found = accents.Keys.Where(french.Contains).ToList();
-        if (found.Count > 0)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("Tip: This answer contains special French characters!");
-            foreach (var ch in found)
-            {
-                Console.WriteLine($"  - To type '{ch}' on Windows: {accents[ch]}");
-            }
-            Console.ResetColor();
-        }
+        if (total <= 0) return;
+        double ratio = (double)learned / total;
+        int filled = (int)Math.Round(ratio * width);
+        filled = Math.Min(Math.Max(filled, 0), width);
+        var bar = new string('█', filled) + new string('─', width - filled);
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write("Progress: ");
+        Console.ResetColor();
+        Console.Write("[", filled, width);
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write(bar);
+        Console.ResetColor();
+        Console.WriteLine($"]  {learned}/{total} learned — {total - learned} remaining\n");
     }
 
     static void PrintBanner()
     {
         Console.ForegroundColor = ConsoleColor.Magenta;
-        Console.WriteLine("╔══════════════════════════════════════════════════╗");
-        Console.WriteLine("║         🥐 French Vocabulary Tester! 🥖         ║");
-        Console.WriteLine("╚══════════════════════════════════════════════════╝");
+        Console.WriteLine("╔════════════════════════════════════════════════╗");
+        Console.WriteLine("║     French sentence → English multiple choice   ║");
+        Console.WriteLine("╚════════════════════════════════════════════════╝");
         Console.ResetColor();
-        Console.WriteLine("Let's learn some tasty French words together! 🍫🍯🍗\n");
+        Console.WriteLine("Translate the French sentence shown into natural English.\n");
     }
 }
