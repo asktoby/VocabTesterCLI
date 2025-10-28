@@ -9,6 +9,7 @@ class Program
 
     static readonly Noun[] Nouns = new[]
     {
+        // Drinks / basics
         new Noun("le café", "coffee", 'm', false),
         new Noun("le chocolat", "chocolate", 'm', false),
         new Noun("le fromage", "cheese", 'm', false),
@@ -16,19 +17,46 @@ class Program
         new Noun("le lait", "milk", 'm', false),
         new Noun("le miel", "honey", 'm', false),
         new Noun("le pain", "bread", 'm', false),
+
+        // Proteins / mains
         new Noun("le poisson", "fish", 'm', false),
         new Noun("le poulet rôti", "roast chicken", 'm', false),
+        new Noun("la viande", "meat", 'f', false),
+        new Noun("les crevettes", "prawns", 'f', true),
+        new Noun("les hamburgers", "hamburgers", 'm', true),
+
+        // Carbs / sides
         new Noun("le riz", "rice", 'm', false),
+        new Noun("les frites", "fries", 'f', true),
+        new Noun("les pommes de terre", "potatoes", 'f', true),
+
+        // Drinks / water
         new Noun("l'eau", "water", 'f', false),
+
+        // Spreads / salads / small items
         new Noun("la confiture", "jam", 'f', false),
         new Noun("la salade verte", "green salad", 'f', false),
-        new Noun("la viande", "meat", 'f', false),
-        new Noun("les aliments", "food", 'm', true),
-        new Noun("les frites", "fries", 'f', true),
+
+        // Fruit / produce
         new Noun("les bananes", "bananas", 'f', true),
         new Noun("les pommes", "apples", 'f', true),
         new Noun("les tomates", "tomatoes", 'f', true),
-        new Noun("les crevettes", "prawns", 'f', true),
+        new Noun("les pêches", "peaches", 'f', true),
+        new Noun("les fruits", "fruit", 'm', true),
+
+        // Seafood / misc
+        new Noun("les calamars", "squid", 'm', true),
+        new Noun("les fruits de mer", "seafood", 'm', true),
+
+        // Sandwiches / eggs / vegetables / sausages
+        new Noun("les sandwiches au fromage", "cheese sandwiches", 'm', true),
+        new Noun("les sandwiches au jambon", "ham sandwiches", 'm', true),
+        new Noun("les oeufs", "eggs", 'm', true),
+        new Noun("les légumes", "vegetables", 'm', true),
+        new Noun("les saucisses", "sausages", 'f', true),
+
+        // Generic / food
+        new Noun("les aliments", "food", 'm', true),
     };
 
     static readonly (string French, string English)[] Subjects =
@@ -43,13 +71,21 @@ class Program
     static readonly (string French, string English)[] Adjectives =
     {
         ("délicieux", "delicious"),
+        ("délicieuses", "delicious"), // surface plural/fem form (English identical)
         ("savoureux", "tasty"),
+        ("savoureuses", "tasty"),
         ("sain", "healthy"),
+        ("sains", "healthy"),
+        ("sanes", "healthy"), // placeholder (not used for French correctness in this app)
         ("dégoûtant", "disgusting"),
+        ("dégoûtants", "disgusting"),
         ("malsain", "unhealthy"),
+        ("malsains", "unhealthy"),
         ("sucré", "sweet"),
+        ("sucrés", "sweet"),
         ("gras", "fatty"),
         ("épicé", "spicy"),
+        ("épicés", "spicy"),
         ("riche en protéines", "rich in protein")
     };
 
@@ -87,72 +123,92 @@ class Program
             }
         }
 
-        // Quiz subset
-        var quiz = sentences.OrderBy(_ => rng.Next()).Take(20).ToList();
-        var remaining = quiz.Select(s => s).ToList();
-        var total = remaining.Count;
+        // Track correctly answered component indices
+        var learnedSubjects = new HashSet<int>();
+        var learnedNouns = new HashSet<int>();
+        var learnedAdjectives = new HashSet<int>();
 
         Console.WriteLine();
         PrintBanner();
 
-        while (remaining.Count > 0)
+        var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
+        while (learnedSubjects.Count < Subjects.Length ||
+               learnedNouns.Count < Nouns.Length ||
+               learnedAdjectives.Count < Adjectives.Length)
         {
-            var roundOrder = remaining.OrderBy(_ => rng.Next()).ToList();
+            // Prefer a sentence that contains at least one untested component
+            var candidate = pool.FirstOrDefault(s =>
+                !learnedSubjects.Contains(s.subjIdx) ||
+                !learnedNouns.Contains(s.nounIdx) ||
+                !learnedAdjectives.Contains(s.adjIdx));
 
-            foreach (var item in roundOrder)
+            // If none found (shouldn't happen given construction), fallback to any random sentence
+            if (candidate.Equals(default))
             {
-                var choiceList = BuildSimilarChoices(item, rng);
-
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine($"\nTranslate into English:\n  {item.French}");
-                Console.ResetColor();
-
-                for (int i = 0; i < choiceList.Count; i++)
-                {
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.Write($" {i + 1}. ");
-                    Console.ResetColor();
-                    Console.WriteLine(choiceList[i]);
-                }
-
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.Write("Pick your answer (1-4): ");
-                Console.ResetColor();
-                var input = Console.ReadLine();
-                if (!int.TryParse(input, out var selected) || selected < 1 || selected > choiceList.Count)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Invalid choice — counted as wrong.");
-                    Console.ResetColor();
-                }
-                else if (choiceList[selected - 1] == item.English)
-                {
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("Correct!\n");
-                    Console.ResetColor();
-                    remaining.Remove(item);
-                }
-                else
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"Wrong — correct: {item.English}\n");
-                    Console.ResetColor();
-                }
-
-                var learned = total - remaining.Count;
-                DrawProgressBar(learned, total, 30);
+                candidate = pool[rng.Next(pool.Count)];
             }
 
-            if (remaining.Count > 0)
+            // Ask the chosen candidate
+            var choiceList = BuildSimilarChoices(candidate, rng);
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"\nTranslate into English:\n  {candidate.French}");
+            Console.ResetColor();
+
+            for (int i = 0; i < choiceList.Count; i++)
             {
-                Console.ForegroundColor = ConsoleColor.Blue;
-                Console.WriteLine($"\nNext round: {remaining.Count} sentence(s) to retry.\n");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write($" {i + 1}. ");
+                Console.ResetColor();
+                Console.WriteLine(choiceList[i]);
+            }
+
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.Write("Pick your answer (1-4): ");
+            Console.ResetColor();
+            var input = Console.ReadLine();
+
+            bool correctAnswer = false;
+            if (!int.TryParse(input, out var selected) || selected < 1 || selected > choiceList.Count)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Invalid choice — counted as wrong.");
                 Console.ResetColor();
             }
+            else if (choiceList[selected - 1] == candidate.English)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Correct!\n");
+                Console.ResetColor();
+                correctAnswer = true;
+
+                // mark components as learned when this sentence is answered correctly
+                learnedSubjects.Add(candidate.subjIdx);
+                learnedNouns.Add(candidate.nounIdx);
+                learnedAdjectives.Add(candidate.adjIdx);
+
+                // remove this sentence from pool so we won't repeat it unnecessarily
+                pool.Remove(candidate);
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Wrong — correct: {candidate.English}\n");
+                Console.ResetColor();
+
+                // move the sentence to the end of the pool for retry later
+                pool.Remove(candidate);
+                pool.Add(candidate);
+            }
+
+            // Show component-based progress after each question
+            DrawComponentProgress(learnedSubjects.Count, Subjects.Length,
+                                  learnedNouns.Count, Nouns.Length,
+                                  learnedAdjectives.Count, Adjectives.Length);
         }
 
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\nAll sentences translated correctly — well done!");
+        Console.WriteLine("\nAll subjects, nouns and adjectives have been tested (answered correctly) — well done!");
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
@@ -161,13 +217,12 @@ class Program
     // Builds 4 choices that are deliberately similar:
     // - pick one component to vary (subject, noun or adjective)
     // - keep the other two components identical for all options
-    // If the chosen component doesn't have enough alternatives, choose a different component.
     static List<string> BuildSimilarChoices((string French, string English, int subjIdx, int nounIdx, int adjIdx) item, Random rng)
     {
         var correct = item.English;
         var choices = new HashSet<string> { correct };
 
-        // candidate component order to attempt (randomized)
+        // Candidate component order to attempt (randomized)
         var attempts = new[] { 0, 1, 2 }.OrderBy(_ => rng.Next()).ToList();
         // 0 = vary adjective, 1 = vary noun, 2 = vary subject
 
@@ -178,77 +233,55 @@ class Program
             if (attempt == 0)
             {
                 // vary adjective: keep subjIdx & nounIdx fixed
-                var pool = Enumerable.Range(0, Adjectives.Length).Where(ai => ai != item.adjIdx).ToList();
-                if (pool.Count >= 3) // enough alternatives
+                var pool = Enumerable.Range(0, Adjectives.Length).Where(ai => ai != item.adjIdx).OrderBy(_ => rng.Next()).ToList();
+                foreach (var ai in pool)
                 {
-                    var picks = pool.OrderBy(_ => rng.Next()).Take(3).ToList();
-                    foreach (var ai in picks)
-                        choices.Add(FormatEnglish(item.subjIdx, item.nounIdx, ai));
+                    if (choices.Count >= 4) break;
+                    choices.Add(FormatEnglish(item.subjIdx, item.nounIdx, ai));
                 }
             }
             else if (attempt == 1)
             {
-                // vary noun: keep subjIdx & adjIdx fixed; require same plurality so "it/they" matches
+                // vary noun: keep subjIdx & adjIdx fixed; require same plurality
                 var pool = Enumerable.Range(0, Nouns.Length)
                     .Where(ni => ni != item.nounIdx && Nouns[ni].IsPlural == Nouns[item.nounIdx].IsPlural)
-                    .ToList();
-                if (pool.Count >= 3)
+                    .OrderBy(_ => rng.Next()).ToList();
+                foreach (var ni in pool)
                 {
-                    var picks = pool.OrderBy(_ => rng.Next()).Take(3).ToList();
-                    foreach (var ni in picks)
-                        choices.Add(FormatEnglish(item.subjIdx, ni, item.adjIdx));
-                }
-                else if (pool.Count > 0)
-                {
-                    // add whatever we can from pool to make distractors closer, we'll fill later
-                    foreach (var ni in pool.OrderBy(_ => rng.Next()))
-                    {
-                        if (choices.Count >= 4) break;
-                        choices.Add(FormatEnglish(item.subjIdx, ni, item.adjIdx));
-                    }
+                    if (choices.Count >= 4) break;
+                    choices.Add(FormatEnglish(item.subjIdx, ni, item.adjIdx));
                 }
             }
             else // attempt == 2
             {
                 // vary subject: keep nounIdx & adjIdx fixed; prefer same polarity group
-                var positive = new[] { 0, 1, 2 }; // indices of positive subjects
+                var positive = new[] { 0, 1, 2 };
                 var negative = new[] { 3, 4 };
                 var subjGroup = positive.Contains(item.subjIdx) ? positive : negative;
-                var pool = subjGroup.Where(si => si != item.subjIdx).ToList();
-                if (pool.Count >= 3)
+                foreach (var si in subjGroup.OrderBy(_ => rng.Next()))
                 {
-                    foreach (var si in pool.OrderBy(_ => rng.Next()).Take(3))
-                        choices.Add(FormatEnglish(si, item.nounIdx, item.adjIdx));
-                }
-                else if (pool.Count > 0)
-                {
-                    foreach (var si in pool.OrderBy(_ => rng.Next()))
-                    {
-                        if (choices.Count >= 4) break;
-                        choices.Add(FormatEnglish(si, item.nounIdx, item.adjIdx));
-                    }
+                    if (si == item.subjIdx) continue;
+                    if (choices.Count >= 4) break;
+                    choices.Add(FormatEnglish(si, item.nounIdx, item.adjIdx));
                 }
             }
         }
 
-        // If we still don't have 4 choices, fill with constrained random candidates
+        // Fill remaining slots with constrained random candidates (change only one component)
         var fillAttempts = 0;
-        while (choices.Count < 4 && fillAttempts < 50)
+        while (choices.Count < 4 && fillAttempts < 100)
         {
             fillAttempts++;
-            // prefer changing only one component relative to correct: randomly pick which to change
             var comp = rng.Next(3);
             int si = item.subjIdx, ni = item.nounIdx, ai = item.adjIdx;
             if (comp == 0) ai = rng.Next(Adjectives.Length);
             else if (comp == 1)
             {
-                // choose noun with same plurality
                 var pool = Enumerable.Range(0, Nouns.Length).Where(i => Nouns[i].IsPlural == Nouns[item.nounIdx].IsPlural).ToList();
                 ni = pool[rng.Next(pool.Count)];
             }
             else
             {
-                // choose subject from same polarity group if possible
                 var positive = new[] { 0, 1, 2 };
                 var negative = new[] { 3, 4 };
                 var group = positive.Contains(item.subjIdx) ? positive : negative;
@@ -259,7 +292,6 @@ class Program
             if (candidate != correct) choices.Add(candidate);
         }
 
-        // Final shuffle and return
         return choices.OrderBy(_ => rng.Next()).ToList();
     }
 
@@ -272,21 +304,11 @@ class Program
         return $"{subj} {noun.English} {because} {adj}";
     }
 
-    static void DrawProgressBar(int learned, int total, int width)
+    static void DrawComponentProgress(int learnedSubj, int totalSubj, int learnedNoun, int totalNoun, int learnedAdj, int totalAdj)
     {
-        if (total <= 0) return;
-        double ratio = (double)learned / total;
-        int filled = (int)Math.Round(ratio * width);
-        filled = Math.Min(Math.Max(filled, 0), width);
-        var bar = new string('█', filled) + new string('─', width - filled);
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.Write("Progress: ");
+        Console.WriteLine($"Subjects: {learnedSubj}/{totalSubj}   Nouns: {learnedNoun}/{totalNoun}   Adjectives: {learnedAdj}/{totalAdj}\n");
         Console.ResetColor();
-        Console.Write("[");
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.Write(bar);
-        Console.ResetColor();
-        Console.WriteLine($"]  {learned}/{total} learned — {total - learned} remaining\n");
     }
 
     static void PrintBanner()
