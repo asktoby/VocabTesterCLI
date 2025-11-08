@@ -5,88 +5,95 @@ using System.Text;
 
 class Program
 {
-    record Noun(string French, string English, char Gender, bool IsPlural);
+    record Subject(string French, string English, int VerbGroup); // VerbGroup: 0=boire,1=manger,2=prendre
+    record Food(string French, string English, int[] Meals);      // Meals: 0=breakfast,1=lunch,2=dinner,3=every day
+    record Meal(string French, string English);
 
-    static readonly Noun[] Nouns = new[]
+    static readonly Subject[] Subjects =
     {
-        // Drinks / basics
-        new Noun("le café", "coffee", 'm', false),
-        new Noun("le chocolat", "chocolate", 'm', false),
-        new Noun("le fromage", "cheese", 'm', false),
-        new Noun("le jus de fruits", "fruit juice", 'm', false),
-        new Noun("le lait", "milk", 'm', false),
-        new Noun("le miel", "honey", 'm', false),
-        new Noun("le pain", "bread", 'm', false),
+        // boire (to drink) - VerbGroup 0
+        new Subject("je bois", "I drink", 0),
+        new Subject("tu bois", "you drink", 0),
+        new Subject("il boit", "he drinks", 0),
+        new Subject("elle boit", "she drinks", 0),
+        new Subject("on boit", "one drinks", 0),
+        new Subject("nous buvons", "we drink", 0),
+        new Subject("vous buvez", "you all drink", 0),
+        new Subject("ils boivent", "they drink", 0),
+        new Subject("elles boivent", "they drink", 0),
 
-        // Proteins / mains
-        new Noun("le poisson", "fish", 'm', false),
-        new Noun("le poulet rôti", "roast chicken", 'm', false),
-        new Noun("la viande", "meat", 'f', false),
-        new Noun("les crevettes", "prawns", 'f', true),
-        new Noun("les hamburgers", "hamburgers", 'm', true),
+        // manger (to eat) - VerbGroup 1
+        new Subject("je mange", "I eat", 1),
+        new Subject("tu manges", "you eat", 1),
+        new Subject("il mange", "he eats", 1),
+        new Subject("elle mange", "she eats", 1),
+        new Subject("on mange", "one eats", 1),
+        new Subject("nous mangeons", "we eat", 1),
+        new Subject("vous mangez", "you all eat", 1),
+        new Subject("ils mangent", "they eat", 1),
+        new Subject("elles mangent", "they eat", 1),
 
-        // Carbs / sides
-        new Noun("le riz", "rice", 'm', false),
-        new Noun("les frites", "fries", 'f', true),
-        new Noun("les pommes de terre", "potatoes", 'f', true),
-
-        // Drinks / water
-        new Noun("l'eau", "water", 'f', false),
-
-        // Spreads / salads / small items
-        new Noun("la confiture", "jam", 'f', false),
-        new Noun("la salade verte", "green salad", 'f', false),
-
-        // Fruit / produce
-        new Noun("les bananes", "bananas", 'f', true),
-        new Noun("les pommes", "apples", 'f', true),
-        new Noun("les tomates", "tomatoes", 'f', true),
-        new Noun("les pêches", "peaches", 'f', true),
-        new Noun("les fruits", "fruit", 'm', true),
-
-        // Seafood / misc
-        new Noun("les calamars", "squid", 'm', true),
-        new Noun("les fruits de mer", "seafood", 'm', true),
-
-        // Sandwiches / eggs / vegetables / sausages
-        new Noun("les sandwiches au fromage", "cheese sandwiches", 'm', true),
-        new Noun("les sandwiches au jambon", "ham sandwiches", 'm', true),
-        new Noun("les oeufs", "eggs", 'm', true),
-        new Noun("les légumes", "vegetables", 'm', true),
-        new Noun("les saucisses", "sausages", 'f', true),
-
-        // Generic / food
-        new Noun("les aliments", "food", 'm', true),
+        // prendre (to have) - VerbGroup 2
+        new Subject("je prends", "I have", 2),
+        new Subject("tu prends", "you have", 2),
+        new Subject("il prend", "he has", 2),
+        new Subject("elle prend", "she has", 2),
+        new Subject("on prend", "one has", 2),
+        new Subject("nous prenons", "we have", 2),
+        new Subject("vous prenez", "you all have", 2),
+        new Subject("ils prennent", "they have", 2),
+        new Subject("elles prennent", "they have", 2),
     };
 
-    static readonly (string French, string English)[] Subjects =
+    static readonly Food[] Foods =
     {
-        ("J'adore", "I love"),
-        ("J'aime", "I like"),
-        ("Je préfère", "I prefer"),
-        ("Je n'aime pas", "I don't like"),
-        ("Je déteste", "I hate")
+        // breakfast (0)
+        new Food("du café", "coffee", new[] {0}),
+        new Food("du chocolat chaud", "hot chocolate", new[] {0}),
+        new Food("du jus de fruits", "fruit juice", new[] {0}),
+        new Food("des céréales", "cereal", new[] {0}),
+        new Food("du pain grillé", "toast", new[] {0}),
+
+        // common beverages (0,1,2)
+        new Food("du lait", "milk", new[] {0,1,2}),
+        new Food("du thé", "tea", new[] {0,1,2}),
+        new Food("de l'eau", "water", new[] {0,1,2}),
+        new Food("de la limonade", "lemonade", new[] {0,1,2}),
+
+        // lunch (1)
+        new Food("du chocolat", "chocolate", new[] {1}),
+        new Food("du fromage", "cheese", new[] {1}),
+        new Food("du miel", "honey", new[] {1}),
+        new Food("du pain", "bread", new[] {1}),
+        new Food("du poisson", "fish", new[] {1}),
+        new Food("du poulet rôti", "roast chicken", new[] {1}),
+        new Food("du riz", "rice", new[] {1}),
+        new Food("du saumon", "salmon", new[] {1}),
+        new Food("de la pizza", "pizza", new[] {1}),
+        new Food("de la salade verte", "green salad", new[] {1}),
+
+        // dinner (2)
+        new Food("de la viande", "meat", new[] {2}),
+        new Food("des frites", "fries", new[] {2}),
+        new Food("des fruits", "fruit", new[] {2}),
+        new Food("des légumes", "vegetables", new[] {2}),
+        new Food("des oeufs", "eggs", new[] {2}),
+        new Food("des pâtes", "pasta", new[] {2}),
+        new Food("des sandwiches", "sandwiches", new[] {2}),
+        new Food("des saucisses", "sausages", new[] {2}),
+        new Food("des spaghettis", "spaghetti", new[] {2}),
+
+        // flexible / every day (3)
+        new Food("des chocolats", "chocolates", new[] {1,2,3}),
+        new Food("du coca", "coke", new[] {0,1,2}),
     };
 
-    static readonly (string French, string English)[] Adjectives =
+    static readonly Meal[] Meals =
     {
-        ("délicieux", "delicious"),
-        ("délicieuses", "delicious"), // surface plural/fem form (English identical)
-        ("savoureux", "tasty"),
-        ("savoureuses", "tasty"),
-        ("sain", "healthy"),
-        ("sains", "healthy"),
-        ("sanes", "healthy"), // placeholder (not used for French correctness in this app)
-        ("dégoûtant", "disgusting"),
-        ("dégoûtants", "disgusting"),
-        ("malsain", "unhealthy"),
-        ("malsains", "unhealthy"),
-        ("sucré", "sweet"),
-        ("sucrés", "sweet"),
-        ("gras", "fatty"),
-        ("épicé", "spicy"),
-        ("épicés", "spicy"),
-        ("riche en protéines", "rich in protein")
+        new Meal("au petit-déjeuner", "at breakfast"),
+        new Meal("au déjeuner", "at lunch"),
+        new Meal("au dîner", "at dinner"),
+        new Meal("tous les jours", "every day")
     };
 
     static void Main()
@@ -95,60 +102,48 @@ class Program
         var rng = new Random();
 
         // Build all possible sentences and keep component indices so we can craft similar distractors
-        var sentences = new List<(string French, string English, int subjIdx, int nounIdx, int adjIdx)>();
+        var sentences = new List<(string French, string English, int subjIdx, int foodIdx, int mealIdx)>();
         for (int si = 0; si < Subjects.Length; si++)
         {
-            for (int ni = 0; ni < Nouns.Length; ni++)
+            for (int fi = 0; fi < Foods.Length; fi++)
             {
-                for (int ai = 0; ai < Adjectives.Length; ai++)
+                foreach (var mi in Foods[fi].Meals)
                 {
+                    // Only include combinations where the food supports the meal
                     var subj = Subjects[si];
-                    var noun = Nouns[ni];
-                    var adj = Adjectives[ai];
+                    var food = Foods[fi];
+                    var meal = Meals[mi];
 
-                    string french;
-                    if (!noun.IsPlural)
-                        french = $"{subj.French} {noun.French} parce que c'est {adj.French}";
-                    else
-                    {
-                        var pron = noun.Gender == 'f' ? "parce qu'elles sont" : "parce qu'ils sont";
-                        french = $"{subj.French} {noun.French} {pron} {adj.French}";
-                    }
+                    var french = $"{subj.French} {food.French} {meal.French}.";
+                    var english = $"{subj.English} {food.English} {meal.English}.";
 
-                    string becauseClause = (!noun.IsPlural) ? $"because it is {adj.English}" : $"because they are {adj.English}";
-                    var english = $"{subj.English} {noun.English} {becauseClause}";
-
-                    sentences.Add((french, english, si, ni, ai));
+                    sentences.Add((french, english, si, fi, mi));
                 }
             }
         }
 
-        // Track correctly answered component indices
         var learnedSubjects = new HashSet<int>();
-        var learnedNouns = new HashSet<int>();
-        var learnedAdjectives = new HashSet<int>();
+        var learnedFoods = new HashSet<int>();
+        var learnedMeals = new HashSet<int>();
 
         Console.WriteLine();
         PrintBanner();
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
         while (learnedSubjects.Count < Subjects.Length ||
-               learnedNouns.Count < Nouns.Length ||
-               learnedAdjectives.Count < Adjectives.Length)
+               learnedFoods.Count < Foods.Length ||
+               learnedMeals.Count < Meals.Length)
         {
-            // Prefer a sentence that contains at least one untested component
             var candidate = pool.FirstOrDefault(s =>
                 !learnedSubjects.Contains(s.subjIdx) ||
-                !learnedNouns.Contains(s.nounIdx) ||
-                !learnedAdjectives.Contains(s.adjIdx));
+                !learnedFoods.Contains(s.foodIdx) ||
+                !learnedMeals.Contains(s.mealIdx));
 
-            // If none found (shouldn't happen given construction), fallback to any random sentence
             if (candidate.Equals(default))
             {
                 candidate = pool[rng.Next(pool.Count)];
             }
 
-            // Ask the chosen candidate
             var choiceList = BuildSimilarChoices(candidate, rng);
 
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -182,12 +177,10 @@ class Program
                 Console.ResetColor();
                 correctAnswer = true;
 
-                // mark components as learned when this sentence is answered correctly
                 learnedSubjects.Add(candidate.subjIdx);
-                learnedNouns.Add(candidate.nounIdx);
-                learnedAdjectives.Add(candidate.adjIdx);
+                learnedFoods.Add(candidate.foodIdx);
+                learnedMeals.Add(candidate.mealIdx);
 
-                // remove this sentence from pool so we won't repeat it unnecessarily
                 pool.Remove(candidate);
             }
             else
@@ -196,35 +189,32 @@ class Program
                 Console.WriteLine($"Wrong — correct: {candidate.English}\n");
                 Console.ResetColor();
 
-                // move the sentence to the end of the pool for retry later
                 pool.Remove(candidate);
                 pool.Add(candidate);
             }
 
-            // Show component-based progress after each question
             DrawComponentProgress(learnedSubjects.Count, Subjects.Length,
-                                  learnedNouns.Count, Nouns.Length,
-                                  learnedAdjectives.Count, Adjectives.Length);
+                                  learnedFoods.Count, Foods.Length,
+                                  learnedMeals.Count, Meals.Length);
         }
 
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\nAll subjects, nouns and adjectives have been tested (answered correctly) — well done!");
+        Console.WriteLine("\nAll subjects, foods and meals have been tested (answered correctly) — well done!");
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
 
     // Builds 4 choices that are deliberately similar:
-    // - pick one component to vary (subject, noun or adjective)
+    // - pick one component to vary (subject, food or meal)
     // - keep the other two components identical for all options
-    static List<string> BuildSimilarChoices((string French, string English, int subjIdx, int nounIdx, int adjIdx) item, Random rng)
+    static List<string> BuildSimilarChoices((string French, string English, int subjIdx, int foodIdx, int mealIdx) item, Random rng)
     {
         var correct = item.English;
         var choices = new HashSet<string> { correct };
 
-        // Candidate component order to attempt (randomized)
         var attempts = new[] { 0, 1, 2 }.OrderBy(_ => rng.Next()).ToList();
-        // 0 = vary adjective, 1 = vary noun, 2 = vary subject
+        // 0 = vary food, 1 = vary meal, 2 = vary subject
 
         foreach (var attempt in attempts)
         {
@@ -232,82 +222,90 @@ class Program
 
             if (attempt == 0)
             {
-                // vary adjective: keep subjIdx & nounIdx fixed
-                var pool = Enumerable.Range(0, Adjectives.Length).Where(ai => ai != item.adjIdx).OrderBy(_ => rng.Next()).ToList();
-                foreach (var ai in pool)
+                // vary food: keep subjIdx & mealIdx fixed; require food that supports same meal
+                var pool = Enumerable.Range(0, Foods.Length)
+                    .Where(fi => fi != item.foodIdx && Foods[fi].Meals.Contains(item.mealIdx))
+                    .OrderBy(_ => rng.Next()).ToList();
+                foreach (var fi in pool)
                 {
                     if (choices.Count >= 4) break;
-                    choices.Add(FormatEnglish(item.subjIdx, item.nounIdx, ai));
+                    choices.Add(FormatEnglish(item.subjIdx, fi, item.mealIdx));
                 }
             }
             else if (attempt == 1)
             {
-                // vary noun: keep subjIdx & adjIdx fixed; require same plurality
-                var pool = Enumerable.Range(0, Nouns.Length)
-                    .Where(ni => ni != item.nounIdx && Nouns[ni].IsPlural == Nouns[item.nounIdx].IsPlural)
-                    .OrderBy(_ => rng.Next()).ToList();
-                foreach (var ni in pool)
+                // vary meal: keep subjIdx & foodIdx fixed; prefer other meals that this food supports
+                var foodMeals = Foods[item.foodIdx].Meals.Where(m => m != item.mealIdx).OrderBy(_ => rng.Next()).ToList();
+                foreach (var mi in foodMeals)
                 {
                     if (choices.Count >= 4) break;
-                    choices.Add(FormatEnglish(item.subjIdx, ni, item.adjIdx));
+                    choices.Add(FormatEnglish(item.subjIdx, item.foodIdx, mi));
                 }
             }
             else // attempt == 2
             {
-                // vary subject: keep nounIdx & adjIdx fixed; prefer same polarity group
-                var positive = new[] { 0, 1, 2 };
-                var negative = new[] { 3, 4 };
-                var subjGroup = positive.Contains(item.subjIdx) ? positive : negative;
-                foreach (var si in subjGroup.OrderBy(_ => rng.Next()))
+                // vary subject: keep foodIdx & mealIdx fixed; prefer subjects from same verb group
+                var group = Subjects[item.subjIdx].VerbGroup;
+                var pool = Enumerable.Range(0, Subjects.Length)
+                    .Where(si => si != item.subjIdx && Subjects[si].VerbGroup == group)
+                    .OrderBy(_ => rng.Next()).ToList();
+                foreach (var si in pool)
                 {
-                    if (si == item.subjIdx) continue;
                     if (choices.Count >= 4) break;
-                    choices.Add(FormatEnglish(si, item.nounIdx, item.adjIdx));
+                    choices.Add(FormatEnglish(si, item.foodIdx, item.mealIdx));
                 }
             }
         }
 
         // Fill remaining slots with constrained random candidates (change only one component)
         var fillAttempts = 0;
-        while (choices.Count < 4 && fillAttempts < 100)
+        while (choices.Count < 4 && fillAttempts < 200)
         {
             fillAttempts++;
             var comp = rng.Next(3);
-            int si = item.subjIdx, ni = item.nounIdx, ai = item.adjIdx;
-            if (comp == 0) ai = rng.Next(Adjectives.Length);
+            int si = item.subjIdx, fi = item.foodIdx, mi = item.mealIdx;
+            if (comp == 0)
+            {
+                // change food but keep same meal
+                var pool = Enumerable.Range(0, Foods.Length).Where(i => Foods[i].Meals.Contains(item.mealIdx)).ToList();
+                fi = pool[rng.Next(pool.Count)];
+            }
             else if (comp == 1)
             {
-                var pool = Enumerable.Range(0, Nouns.Length).Where(i => Nouns[i].IsPlural == Nouns[item.nounIdx].IsPlural).ToList();
-                ni = pool[rng.Next(pool.Count)];
+                // change meal to one the food supports (or random if none)
+                var alternatives = Foods[item.foodIdx].Meals.ToList();
+                if (alternatives.Count == 0)
+                    mi = rng.Next(Meals.Length);
+                else
+                    mi = alternatives[rng.Next(alternatives.Count)];
             }
             else
             {
-                var positive = new[] { 0, 1, 2 };
-                var negative = new[] { 3, 4 };
-                var group = positive.Contains(item.subjIdx) ? positive : negative;
-                si = group.OrderBy(_ => rng.Next()).First();
+                // change subject, prefer same verb group
+                var group = Subjects[item.subjIdx].VerbGroup;
+                var pool = Enumerable.Range(0, Subjects.Length).Where(i => Subjects[i].VerbGroup == group).ToList();
+                si = pool[rng.Next(pool.Count)];
             }
 
-            var candidate = FormatEnglish(si, ni, ai);
+            var candidate = FormatEnglish(si, fi, mi);
             if (candidate != correct) choices.Add(candidate);
         }
 
         return choices.OrderBy(_ => rng.Next()).ToList();
     }
 
-    static string FormatEnglish(int subjIdx, int nounIdx, int adjIdx)
+    static string FormatEnglish(int subjIdx, int foodIdx, int mealIdx)
     {
         var subj = Subjects[subjIdx].English;
-        var noun = Nouns[nounIdx];
-        var adj = Adjectives[adjIdx].English;
-        var because = noun.IsPlural ? "because they are" : "because it is";
-        return $"{subj} {noun.English} {because} {adj}";
+        var food = Foods[foodIdx].English;
+        var meal = Meals[mealIdx].English;
+        return $"{subj} {food} {meal}.";
     }
 
-    static void DrawComponentProgress(int learnedSubj, int totalSubj, int learnedNoun, int totalNoun, int learnedAdj, int totalAdj)
+    static void DrawComponentProgress(int learnedSubj, int totalSubj, int learnedFood, int totalFood, int learnedMeal, int totalMeal)
     {
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"Subjects: {learnedSubj}/{totalSubj}   Nouns: {learnedNoun}/{totalNoun}   Adjectives: {learnedAdj}/{totalAdj}\n");
+        Console.WriteLine($"Subjects: {learnedSubj}/{totalSubj}   Foods: {learnedFood}/{totalFood}   Meals: {learnedMeal}/{totalMeal}\n");
         Console.ResetColor();
     }
 
