@@ -304,9 +304,47 @@ class Program
 
     static void DrawComponentProgress(int learnedSubj, int totalSubj, int learnedFood, int totalFood, int learnedMeal, int totalMeal)
     {
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"Subjects: {learnedSubj}/{totalSubj}   Foods: {learnedFood}/{totalFood}   Meals: {learnedMeal}/{totalMeal}\n");
+        // Render three ASCII progress bars (Subjects, Foods, Meals)
+        Console.WriteLine();
+        DrawProgressBar("Subjects:", learnedSubj, totalSubj, 24);
+        DrawProgressBar("Foods:",    learnedFood,  totalFood,  24);
+        DrawProgressBar("Meals:",    learnedMeal,  totalMeal,  24);
+        Console.WriteLine();
+    }
+
+    // Helper to draw a single labeled ASCII progress bar with optional color
+    static void DrawProgressBar(string label, int learned, int total, int width = 20)
+    {
+        if (total <= 0)
+        {
+            Console.WriteLine($"{label.PadRight(12)} [no items]");
+            return;
+        }
+
+        learned = Math.Clamp(learned, 0, total);
+        double ratio = (double)learned / total;
+        int filled = (int)Math.Round(ratio * width);
+
+        // Label padded for alignment
+        Console.Write(label.PadRight(12));
+        Console.Write(" [");
+
+        // Filled portion (green)
+        if (filled > 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.Write(new string('#', filled));
+        }
+
+        // Unfilled portion (dark gray)
+        if (filled < width)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write(new string('-', width - filled));
+        }
+
         Console.ResetColor();
+        Console.Write($"] {learned}/{total}\n");
     }
 
     static void PrintBanner()
