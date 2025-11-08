@@ -134,11 +134,12 @@ class Program
                      learnedMeals.Count, Meals.Length);
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
+
         while (learnedSubjects.Count < Subjects.Length ||
                learnedFoods.Count < Foods.Length ||
                learnedMeals.Count < Meals.Length)
         {
-            // Clear and redraw screen before each question so user can't scroll up to prior content
+            // Always clear and redraw the screen before each question
             RedrawScreen(learnedSubjects.Count, Subjects.Length,
                          learnedFoods.Count, Foods.Length,
                          learnedMeals.Count, Meals.Length);
@@ -178,6 +179,10 @@ class Program
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("Invalid choice — counted as wrong.");
                 Console.ResetColor();
+
+                // Keep behavior: treat as wrong but do not pause for review.
+                pool.Remove(candidate);
+                pool.Add(candidate);
             }
             else if (choiceList[selected - 1] == candidate.English)
             {
@@ -194,12 +199,29 @@ class Program
             }
             else
             {
+                // WRONG — keep the question and both the chosen wrong answer and the correct answer on screen
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"Wrong — correct: {candidate.English}\n");
+                Console.WriteLine($"Wrong — correct: {candidate.English}");
                 Console.ResetColor();
 
+                // Show what the user answered (for clarity) and highlight it
+                Console.ForegroundColor = ConsoleColor.DarkRed;
+                Console.WriteLine($"You answered: {choiceList[selected - 1]}\n");
+                Console.ResetColor();
+
+                // Keep the candidate in the pool for future testing
                 pool.Remove(candidate);
                 pool.Add(candidate);
+
+                // Wait for the user to study the mistake, then clear and redraw immediately after they press Enter
+                Console.WriteLine("Press Enter to continue...");
+                Console.ReadLine();
+
+                // Clear and redraw the screen now (so the mistake is visible until they press Enter,
+                // and then the screen is cleared before the next question).
+                RedrawScreen(learnedSubjects.Count, Subjects.Length,
+                             learnedFoods.Count, Foods.Length,
+                             learnedMeals.Count, Meals.Length);
             }
 
             DrawComponentProgress(learnedSubjects.Count, Subjects.Length,
