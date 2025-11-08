@@ -127,13 +127,22 @@ class Program
         var learnedMeals = new HashSet<int>();
 
         Console.WriteLine();
-        PrintBanner();
+
+        // Initial draw before the first question
+        RedrawScreen(learnedSubjects.Count, Subjects.Length,
+                     learnedFoods.Count, Foods.Length,
+                     learnedMeals.Count, Meals.Length);
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
         while (learnedSubjects.Count < Subjects.Length ||
                learnedFoods.Count < Foods.Length ||
                learnedMeals.Count < Meals.Length)
         {
+            // Clear and redraw screen before each question so user can't scroll up to prior content
+            RedrawScreen(learnedSubjects.Count, Subjects.Length,
+                         learnedFoods.Count, Foods.Length,
+                         learnedMeals.Count, Meals.Length);
+
             var candidate = pool.FirstOrDefault(s =>
                 !learnedSubjects.Contains(s.subjIdx) ||
                 !learnedFoods.Contains(s.foodIdx) ||
@@ -196,6 +205,9 @@ class Program
             DrawComponentProgress(learnedSubjects.Count, Subjects.Length,
                                   learnedFoods.Count, Foods.Length,
                                   learnedMeals.Count, Meals.Length);
+
+            // small pause so user sees result before next redraw (optional)
+            System.Threading.Thread.Sleep(650);
         }
 
         Console.ForegroundColor = ConsoleColor.Green;
@@ -203,6 +215,22 @@ class Program
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
+    }
+
+    // Draws the screen header + the three progress bars
+    static void RedrawScreen(int learnedSubj, int totalSubj, int learnedFood, int totalFood, int learnedMeal, int totalMeal)
+    {
+        try
+        {
+            Console.Clear();
+        }
+        catch
+        {
+            // Some hosts (rare) may not support Clear; ignore failures and continue
+        }
+
+        PrintBanner();
+        DrawComponentProgress(learnedSubj, totalSubj, learnedFood, totalFood, learnedMeal, totalMeal);
     }
 
     // Builds 4 choices that are deliberately similar:
@@ -351,7 +379,7 @@ class Program
     {
         Console.ForegroundColor = ConsoleColor.Magenta;
         Console.WriteLine("╔════════════════════════════════════════════════╗");
-        Console.WriteLine("║     French sentence → English multiple choice   ║");
+        Console.WriteLine("║     French sentence → English multiple choice  ║");
         Console.WriteLine("╚════════════════════════════════════════════════╝");
         Console.ResetColor();
         Console.WriteLine("Translate the French sentence shown into natural English.\n");
