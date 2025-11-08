@@ -38,6 +38,10 @@ class Program
         // After correct, require English -> French (typed) before eliminating.
         var remaining = Vocab.ToDictionary(v => v, v => QuizState.NeedEnglish);
 
+        // store text + color for feedback shown with next question
+        (string Text, ConsoleColor Color)? lastFeedback = null;
+        var total = Vocab.Length;
+
         PrintBanner();
 
         while (remaining.Count > 0)
@@ -49,6 +53,23 @@ class Program
                 // item may have been removed earlier in this pass
                 if (!remaining.TryGetValue(key, out var state))
                     continue;
+
+                // Clear and show banner + last feedback before each question
+                Console.Clear();
+                PrintBanner();
+
+                // Show progress (learned vs remaining)
+                var learned = total - remaining.Count;
+                DrawProgressBar(learned, total, 30);
+
+                if (lastFeedback.HasValue)
+                {
+                    Console.ForegroundColor = lastFeedback.Value.Color;
+                    Console.WriteLine(lastFeedback.Value.Text);
+                    Console.ResetColor();
+                    Console.WriteLine();
+                    lastFeedback = null;
+                }
 
                 bool correct = false;
 
@@ -78,24 +99,22 @@ class Program
                     var input = Console.ReadLine();
                     if (!int.TryParse(input, out int selected) || selected < 1 || selected > choices.Count)
                     {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("Oopsie! That's not a valid choice. Counted as wrong for this round. 🐣");
-                        Console.ResetColor();
+                        // invalid - mark as wrong for this round and show correction next question (red)
+                        lastFeedback = ($"Invalid choice — correct: {key.English}", ConsoleColor.Red);
                         continue;
                     }
 
                     if (choices[selected - 1] == key.English)
                     {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("Yay! You got it right! 🎉✨");
-                        Console.ResetColor();
+                        // don't pause — show congrats (green) with next question
+                        lastFeedback = ("Correct! 🎉✨", ConsoleColor.Green);
                         correct = true;
                     }
                     else
                     {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"Aww, not quite! The correct answer is \"{key.English}\". 🍬");
-                        Console.ResetColor();
+                        // immediate correction shown on next question (red)
+                        lastFeedback = ($"Wrong — correct: {key.English}", ConsoleColor.Red);
+                        // counted as wrong this pass
                         continue;
                     }
                 }
@@ -115,19 +134,17 @@ class Program
 
                         if (AreEquivalentFrench(input, key.French))
                         {
-                            Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine("Magnifique! You got the French right! 🥳🥐");
-                            Console.ResetColor();
+                            // success — show congrats (green) with next question
+                            lastFeedback = ("Magnifique! You got the French right! 🥳🥐", ConsoleColor.Green);
                             correct = true;
                             break;
                         }
 
-                        // Wrong: show correct answer, then require user to type it correctly before proceeding
+                        // Wrong: show correct answer immediately (red), then require user to type it correctly
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine($"Aww, not quite! The correct answer is \"{key.French}\". 🍬");
                         Console.ResetColor();
 
-                        // require the user to re-type it correctly
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         Console.Write("Please type the correct French word now (accents optional): ");
                         Console.ResetColor();
@@ -135,9 +152,7 @@ class Program
                         var confirm = Console.ReadLine()?.Trim() ?? "";
                         if (AreEquivalentFrench(confirm, key.French))
                         {
-                            Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine("Thanks — that's correct. Proceeding... 🥖");
-                            Console.ResetColor();
+                            lastFeedback = ("Thanks — that's correct. Proceeding... 🥖", ConsoleColor.Green);
                             correct = true;
                             break;
                         }
@@ -146,7 +161,7 @@ class Program
                             Console.ForegroundColor = ConsoleColor.Red;
                             Console.WriteLine("That's still not correct. Let's try again.");
                             Console.ResetColor();
-                            // loop continues until correct
+                            // loop remains until correct
                         }
                     }
                 }
@@ -165,10 +180,15 @@ class Program
                         remaining.Remove(key);
                     }
                 }
+
+                // Immediately continue to next question; lastFeedback will be displayed above it
             }
             // Loop continues until remaining is empty; incorrect answers remain unchanged
         }
 
+        // Final clear + banner + celebration
+        Console.Clear();
+        PrintBanner();
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("\n🌈 All words answered correctly both ways! You're a vocab superstar! 🦄✨");
         Console.ResetColor();
@@ -201,6 +221,23 @@ class Program
         }
 
         return string.Equals(Normalize(userInput), Normalize(correctFrench), StringComparison.OrdinalIgnoreCase);
+    }
+
+    static void DrawProgressBar(int learned, int total, int width)
+    {
+        if (total <= 0) return;
+        double ratio = (double)learned / total;
+        int filled = (int)Math.Round(ratio * width);
+        filled = Math.Min(Math.Max(filled, 0), width);
+        var bar = new string('█', filled) + new string('─', width - filled);
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write("Progress: ");
+        Console.ResetColor();
+        Console.Write("[");
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write(bar);
+        Console.ResetColor();
+        Console.WriteLine($"]  {learned}/{total} learned — {total - learned} remaining\n");
     }
 
     static void PrintBanner()
