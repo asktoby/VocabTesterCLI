@@ -9,22 +9,32 @@ class Program
 {
     static readonly (string French, string English)[] Vocab = new[]
     {
-        ("les calamars", "squid"),
-        ("les fruits", "fruit"),
-        ("les fruits de mer", "seafood"),
-        ("les hamburgers", "hamburgers"),
-        ("les légumes", "vegetables"),
-        ("les oeufs", "eggs"),
-        ("les sandwiches au fromage", "cheese sandwiches"),
-        ("les sandwiches au jambon", "ham sandwiches"),
-        ("les bananes", "bananas"),
-        ("les crevettes", "prawns"),
-        ("les frites", "fries"),
-        ("les pêches", "peaches"),
-        ("les pommes", "apples"),
-        ("les pommes de terre", "potatoes"),
-        ("les saucisses", "sausages"),
-        ("les tomates", "tomatoes"),
+        ("acteur", "actor"),
+        ("actrice", "actress"),
+        ("avocat", "lawyer"),
+        ("avocate", "lawyer"),
+        ("coiffeur", "hairdresser"),
+        ("coiffeuse", "hairdresser"),
+        ("comptable", "accountant"),
+        ("cuisinier", "chef"),
+        ("cuisinière", "chef"),
+        ("fermier", "farmer"),
+        ("fermière", "farmer"),
+        ("homme au foyer", "house-husband"),
+        ("femme au foyer", "house-wife"),
+        ("homme d'affaires", "businessman"),
+        ("femme d'affaires", "businesswoman"),
+        ("infirmier", "nurse"),
+        ("infirmière", "nurse"),
+        ("ingénieur", "engineer"),
+        ("ingénieure", "engineer"),
+        ("mécanicien", "mechanic"),
+        ("mécanicienne", "mechanic"),
+        ("médecin", "doctor"),
+        ("plombier", "plumber"),
+        ("plombière", "plumber"),
+        ("professeur", "teacher"),
+        ("professeure", "teacher"),
     };
 
     enum QuizState { NeedEnglish, NeedFrench }
@@ -100,7 +110,7 @@ class Program
                     if (!int.TryParse(input, out int selected) || selected < 1 || selected > choices.Count)
                     {
                         // invalid - mark as wrong for this round and show correction next question (red)
-                        lastFeedback = ($"Invalid choice — correct: {key.English}", ConsoleColor.Red);
+                        lastFeedback = ($"Invalid choice — correct: {key.English} (French: \"{key.French}\")", ConsoleColor.Red);
                         continue;
                     }
 
@@ -112,8 +122,8 @@ class Program
                     }
                     else
                     {
-                        // immediate correction shown on next question (red)
-                        lastFeedback = ($"Wrong — correct: {key.English}", ConsoleColor.Red);
+                        // immediate correction shown on next question (red) and include the French being tested
+                        lastFeedback = ($"Wrong — correct: {key.English} (French: \"{key.French}\")", ConsoleColor.Red);
                         // counted as wrong this pass
                         continue;
                     }
@@ -121,49 +131,60 @@ class Program
                 else // NeedFrench
                 {
                     // Ask for French meaning (free text): English -> French
+                    // Include gender hint (male/female) in the prompt
+                    var genderHint = GetGenderHint(key.French);
                     Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"\n🌟 Type the French for \"{key.English}\"! 🌟");
+                    Console.WriteLine($"\n🌟 Type the French {genderHint} for \"{key.English}\"! 🌟");
                     Console.ResetColor();
 
-                    while (true)
+                    // Track whether user corrected a shown answer; corrections should not mark the item as learned.
+                    bool correctedButNotLearned = false;
+
+                    // First attempt (if correct immediately => learned); otherwise show correct, require typing it, but do not mark learned.
+                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.Write("Your answer: ");
+                    Console.ResetColor();
+                    var firstInput = Console.ReadLine()?.Trim() ?? "";
+
+                    if (AreEquivalentFrench(firstInput, key.French))
                     {
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.Write("Your answer: ");
-                        Console.ResetColor();
-                        var input = Console.ReadLine()?.Trim() ?? "";
-
-                        if (AreEquivalentFrench(input, key.French))
-                        {
-                            // success — show congrats (green) with next question
-                            lastFeedback = ("Magnifique! You got the French right! 🥳🥐", ConsoleColor.Green);
-                            correct = true;
-                            break;
-                        }
-
+                        // success — show congrats (green) with next question and mark as learned
+                        lastFeedback = ("Magnifique! You got the French right! 🥳🥐", ConsoleColor.Green);
+                        correct = true;
+                    }
+                    else
+                    {
                         // Wrong: show correct answer immediately (red), then require user to type it correctly
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine($"Aww, not quite! The correct answer is \"{key.French}\". 🍬");
                         Console.ResetColor();
 
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.Write("Please type the correct French word now (accents optional): ");
-                        Console.ResetColor();
-
-                        var confirm = Console.ReadLine()?.Trim() ?? "";
-                        if (AreEquivalentFrench(confirm, key.French))
+                        // Ask user to type the correct form now (this is practice only; does not mark as learned)
+                        while (true)
                         {
-                            lastFeedback = ("Thanks — that's correct. Proceeding... 🥖", ConsoleColor.Green);
-                            correct = true;
-                            break;
-                        }
-                        else
-                        {
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine("That's still not correct. Let's try again.");
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.Write("Please type the correct French word now (accents optional): ");
                             Console.ResetColor();
-                            // loop remains until correct
+
+                            var confirm = Console.ReadLine()?.Trim() ?? "";
+                            if (AreEquivalentFrench(confirm, key.French))
+                            {
+                                correctedButNotLearned = true;
+                                lastFeedback = ("Thanks — that's correct. You'll be retested later. 🥖", ConsoleColor.Yellow);
+                                break;
+                            }
+                            else
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine("That's still not correct. Let's try again.");
+                                Console.ResetColor();
+                                // loop remains until correct
+                            }
                         }
                     }
+
+                    // If correctedButNotLearned is true we intentionally do NOT set correct = true,
+                    // so the item remains in 'remaining' and progress doesn't increment.
                 }
 
                 // If correct, advance state or remove
@@ -194,6 +215,17 @@ class Program
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
+    }
+
+    static string GetGenderHint(string french)
+    {
+        // Basic heuristic based on the french word form used in the dataset.
+        // If it contains "femme" or ends with 'e' (common feminine marker in this set), label female; otherwise male.
+        if (string.IsNullOrWhiteSpace(french)) return "";
+        var trimmed = french.Trim().ToLowerInvariant();
+        if (trimmed.Contains("femme") || trimmed.EndsWith("e"))
+            return "(female)";
+        return "(male)";
     }
 
     static bool AreEquivalentFrench(string userInput, string correctFrench)
