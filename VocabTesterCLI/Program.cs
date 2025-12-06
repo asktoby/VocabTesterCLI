@@ -425,9 +425,9 @@ class Program
     static void PrintBanner()
     {
         Console.ForegroundColor = ConsoleColor.Magenta;
-        Console.WriteLine("╔══════════════════════════════════════════════════╗");
-        Console.WriteLine("║         🥐 French Vocabulary Tester! 🥖         ║");
-        Console.WriteLine("╚══════════════════════════════════════════════════╝");
+        Console.WriteLine("══════════════════════════════════════════════════");
+        Console.WriteLine("         🥐 French Vocabulary Tester! 🥖         ");
+        Console.WriteLine("══════════════════════════════════════════════════");
         Console.ResetColor();
         Console.WriteLine("We'll test French → English first (multiple choice), then English → French (type the French).");
         Console.WriteLine("Accents are optional when typing the French — ASCII equivalents are accepted.\n");
