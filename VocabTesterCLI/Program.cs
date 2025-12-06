@@ -5,95 +5,42 @@ using System.Text;
 
 class Program
 {
-    record Subject(string French, string English, int VerbGroup); // VerbGroup: 0=boire,1=manger,2=prendre
-    record Food(string French, string English, int[] Meals);      // Meals: 0=breakfast,1=lunch,2=dinner,3=every day
+    // Reuse existing small records but repurpose them as:
+    // - Subject -> Weather item
+    // - Food    -> Place item
+    // - Meal    -> Time / adverb item
+    record Subject(string French, string English, int VerbGroup); // VerbGroup unused but kept for compatibility
+    record Food(string French, string English, int[] Meals);      // Meals field unused for places but kept for compatibility
     record Meal(string French, string English);
 
-    static readonly Subject[] Subjects =
+    // WEATHER items (previously 'Subjects')
+    static readonly Subject[] Weather =
     {
-        // boire (to drink) - VerbGroup 0
-        new Subject("je bois", "I drink", 0),
-        new Subject("tu bois", "you drink", 0),
-        new Subject("il boit", "he drinks", 0),
-        new Subject("elle boit", "she drinks", 0),
-        new Subject("on boit", "one drinks", 0),
-        new Subject("nous buvons", "we drink", 0),
-        new Subject("vous buvez", "you all drink", 0),
-        new Subject("ils boivent", "they drink", 0),
-        new Subject("elles boivent", "they drink", 0),
-
-        // manger (to eat) - VerbGroup 1
-        new Subject("je mange", "I eat", 1),
-        new Subject("tu manges", "you eat", 1),
-        new Subject("il mange", "he eats", 1),
-        new Subject("elle mange", "she eats", 1),
-        new Subject("on mange", "one eats", 1),
-        new Subject("nous mangeons", "we eat", 1),
-        new Subject("vous mangez", "you all eat", 1),
-        new Subject("ils mangent", "they eat", 1),
-        new Subject("elles mangent", "they eat", 1),
-
-        // prendre (to have) - VerbGroup 2
-        new Subject("je prends", "I have", 2),
-        new Subject("tu prends", "you have", 2),
-        new Subject("il prend", "he has", 2),
-        new Subject("elle prend", "she has", 2),
-        new Subject("on prend", "one has", 2),
-        new Subject("nous prenons", "we have", 2),
-        new Subject("vous prenez", "you all have", 2),
-        new Subject("ils prennent", "they have", 2),
-        new Subject("elles prennent", "they have", 2),
+        new Subject("il fait beau",     "it is good weather", 0),
+        new Subject("il fait chaud",    "it is hot", 0),
+        new Subject("il y a du soleil", "it is sunny", 0),
+        new Subject("il fait froid",    "it is cold", 0),
+        new Subject("il fait mauvais",  "it is bad weather", 0),
+        new Subject("il pleut",         "it rains", 0),
+        new Subject("il neige",         "it snows", 0),
     };
 
-    static readonly Food[] Foods =
+    // PLACES items (previously 'Foods')
+    static readonly Food[] Places =
     {
-        // breakfast (0)
-        new Food("du café", "coffee", new[] {0}),
-        new Food("du chocolat chaud", "hot chocolate", new[] {0}),
-        new Food("du jus de fruits", "fruit juice", new[] {0}),
-        new Food("des céréales", "cereal", new[] {0}),
-        new Food("du pain grillé", "toast", new[] {0}),
-
-        // common beverages (0,1,2)
-        new Food("du lait", "milk", new[] {0,1,2}),
-        new Food("du thé", "tea", new[] {0,1,2}),
-        new Food("de l'eau", "water", new[] {0,1,2}),
-        new Food("de la limonade", "lemonade", new[] {0,1,2}),
-
-        // lunch (1)
-        new Food("du chocolat", "chocolate", new[] {1}),
-        new Food("du fromage", "cheese", new[] {1}),
-        new Food("du miel", "honey", new[] {1}),
-        new Food("du pain", "bread", new[] {1}),
-        new Food("du poisson", "fish", new[] {1}),
-        new Food("du poulet rôti", "roast chicken", new[] {1}),
-        new Food("du riz", "rice", new[] {1}),
-        new Food("du saumon", "salmon", new[] {1}),
-        new Food("de la pizza", "pizza", new[] {1}),
-        new Food("de la salade verte", "green salad", new[] {1}),
-
-        // dinner (2)
-        new Food("de la viande", "meat", new[] {2}),
-        new Food("des frites", "fries", new[] {2}),
-        new Food("des fruits", "fruit", new[] {2}),
-        new Food("des légumes", "vegetables", new[] {2}),
-        new Food("des oeufs", "eggs", new[] {2}),
-        new Food("des pâtes", "pasta", new[] {2}),
-        new Food("des sandwiches", "sandwiches", new[] {2}),
-        new Food("des saucisses", "sausages", new[] {2}),
-        new Food("des spaghettis", "spaghetti", new[] {2}),
-
-        // flexible / every day (3)
-        new Food("des chocolats", "chocolates", new[] {1,2,3}),
-        new Food("du coca", "coke", new[] {0,1,2}),
+        new Food("À la maison",  "At home",     new[] { 0 }),
+        new Food("Au collège",   "At school",   new[] { 0 }),
+        new Food("Au gymnase",   "At the gym",  new[] { 0 }),
+        new Food("À la plage",   "On the beach",new[] { 0 }),
     };
 
-    static readonly Meal[] Meals =
+    // TIMES / frequency adverbs (previously 'Meals')
+    static readonly Meal[] Times =
     {
-        new Meal("au petit-déjeuner", "at breakfast"),
-        new Meal("au déjeuner", "at lunch"),
-        new Meal("au dîner", "at dinner"),
-        new Meal("tous les jours", "every day")
+        new Meal("D'habitude",  "Usually"),
+        new Meal("En général",  "In general"),
+        new Meal("Normalement", "Normally"),
+        new Meal("Parfois",     "Sometimes"),
     };
 
     static void Main()
@@ -101,53 +48,58 @@ class Program
         Console.OutputEncoding = Encoding.UTF8;
         var rng = new Random();
 
-        // Build all possible sentences and keep component indices so we can craft similar distractors
-        var sentences = new List<(string French, string English, int subjIdx, int foodIdx, int mealIdx)>();
-        for (int si = 0; si < Subjects.Length; si++)
+        // Build all vocabulary entries as standalone "sentences".
+        // We'll store component indices so distractor generation can vary the same category.
+        // tuple: french, english, weatherIdx, placeIdx, timeIdx
+        var sentences = new List<(string French, string English, int weatherIdx, int placeIdx, int timeIdx)>();
+
+        // Weather entries
+        for (int wi = 0; wi < Weather.Length; wi++)
         {
-            for (int fi = 0; fi < Foods.Length; fi++)
-            {
-                foreach (var mi in Foods[fi].Meals)
-                {
-                    // Only include combinations where the food supports the meal
-                    var subj = Subjects[si];
-                    var food = Foods[fi];
-                    var meal = Meals[mi];
-
-                    var french = $"{subj.French} {food.French} {meal.French}.";
-                    var english = $"{subj.English} {food.English} {meal.English}.";
-
-                    sentences.Add((french, english, si, fi, mi));
-                }
-            }
+            var w = Weather[wi];
+            sentences.Add(($"{w.French}.", $"{w.English}.", wi, -1, -1));
         }
 
-        var learnedSubjects = new HashSet<int>();
-        var learnedFoods = new HashSet<int>();
-        var learnedMeals = new HashSet<int>();
+        // Place entries
+        for (int pi = 0; pi < Places.Length; pi++)
+        {
+            var p = Places[pi];
+            sentences.Add(($"{p.French}.", $"{p.English}.", -1, pi, -1));
+        }
+
+        // Time / adverb entries
+        for (int ti = 0; ti < Times.Length; ti++)
+        {
+            var t = Times[ti];
+            sentences.Add(($"{t.French}.", $"{t.English}.", -1, -1, ti));
+        }
+
+        var learnedWeather = new HashSet<int>();
+        var learnedPlaces = new HashSet<int>();
+        var learnedTimes = new HashSet<int>();
 
         Console.WriteLine();
 
         // Initial draw before the first question
-        RedrawScreen(learnedSubjects.Count, Subjects.Length,
-                     learnedFoods.Count, Foods.Length,
-                     learnedMeals.Count, Meals.Length);
+        RedrawScreen(learnedWeather.Count, Weather.Length,
+                     learnedPlaces.Count, Places.Length,
+                     learnedTimes.Count, Times.Length);
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
 
-        while (learnedSubjects.Count < Subjects.Length ||
-               learnedFoods.Count < Foods.Length ||
-               learnedMeals.Count < Meals.Length)
+        while (learnedWeather.Count < Weather.Length ||
+               learnedPlaces.Count < Places.Length ||
+               learnedTimes.Count < Times.Length)
         {
             // Always clear and redraw the screen before each question
-            RedrawScreen(learnedSubjects.Count, Subjects.Length,
-                         learnedFoods.Count, Foods.Length,
-                         learnedMeals.Count, Meals.Length);
+            RedrawScreen(learnedWeather.Count, Weather.Length,
+                         learnedPlaces.Count, Places.Length,
+                         learnedTimes.Count, Times.Length);
 
             var candidate = pool.FirstOrDefault(s =>
-                !learnedSubjects.Contains(s.subjIdx) ||
-                !learnedFoods.Contains(s.foodIdx) ||
-                !learnedMeals.Contains(s.mealIdx));
+                (s.weatherIdx >= 0 && !learnedWeather.Contains(s.weatherIdx)) ||
+                (s.placeIdx   >= 0 && !learnedPlaces.Contains(s.placeIdx)) ||
+                (s.timeIdx    >= 0 && !learnedTimes.Contains(s.timeIdx)));
 
             if (candidate.Equals(default))
             {
@@ -173,7 +125,6 @@ class Program
             Console.ResetColor();
             var input = Console.ReadLine();
 
-            bool correctAnswer = false;
             if (!int.TryParse(input, out var selected) || selected < 1 || selected > choiceList.Count)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -189,11 +140,11 @@ class Program
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("Correct!\n");
                 Console.ResetColor();
-                correctAnswer = true;
 
-                learnedSubjects.Add(candidate.subjIdx);
-                learnedFoods.Add(candidate.foodIdx);
-                learnedMeals.Add(candidate.mealIdx);
+                // Mark learned item in the right category
+                if (candidate.weatherIdx >= 0) learnedWeather.Add(candidate.weatherIdx);
+                if (candidate.placeIdx   >= 0) learnedPlaces.Add(candidate.placeIdx);
+                if (candidate.timeIdx    >= 0) learnedTimes.Add(candidate.timeIdx);
 
                 pool.Remove(candidate);
             }
@@ -217,30 +168,29 @@ class Program
                 Console.WriteLine("Press Enter to continue...");
                 Console.ReadLine();
 
-                // Clear and redraw the screen now (so the mistake is visible until they press Enter,
-                // and then the screen is cleared before the next question).
-                RedrawScreen(learnedSubjects.Count, Subjects.Length,
-                             learnedFoods.Count, Foods.Length,
-                             learnedMeals.Count, Meals.Length);
+                // Clear and redraw the screen now
+                RedrawScreen(learnedWeather.Count, Weather.Length,
+                             learnedPlaces.Count, Places.Length,
+                             learnedTimes.Count, Times.Length);
             }
 
-            DrawComponentProgress(learnedSubjects.Count, Subjects.Length,
-                                  learnedFoods.Count, Foods.Length,
-                                  learnedMeals.Count, Meals.Length);
+            DrawComponentProgress(learnedWeather.Count, Weather.Length,
+                                  learnedPlaces.Count, Places.Length,
+                                  learnedTimes.Count, Times.Length);
 
             // small pause so user sees result before next redraw (optional)
             System.Threading.Thread.Sleep(650);
         }
 
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\nAll subjects, foods and meals have been tested (answered correctly) — well done!");
+        Console.WriteLine("\nAll weather, places and times items have been tested (answered correctly) — well done!");
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
 
     // Draws the screen header + the three progress bars
-    static void RedrawScreen(int learnedSubj, int totalSubj, int learnedFood, int totalFood, int learnedMeal, int totalMeal)
+    static void RedrawScreen(int learnedWeather, int totalWeather, int learnedPlaces, int totalPlaces, int learnedTimes, int totalTimes)
     {
         try
         {
@@ -252,113 +202,131 @@ class Program
         }
 
         PrintBanner();
-        DrawComponentProgress(learnedSubj, totalSubj, learnedFood, totalFood, learnedMeal, totalMeal);
+        DrawComponentProgress(learnedWeather, totalWeather, learnedPlaces, totalPlaces, learnedTimes, totalTimes);
     }
 
-    // Builds 4 choices that are deliberately similar:
-    // - pick one component to vary (subject, food or meal)
-    // - keep the other two components identical for all options
-    static List<string> BuildSimilarChoices((string French, string English, int subjIdx, int foodIdx, int mealIdx) item, Random rng)
+    // Builds 4 choices that are deliberately similar.
+    // If the candidate is a single-category item (weather/place/time) produce distractors from the same category.
+    static List<string> BuildSimilarChoices((string French, string English, int weatherIdx, int placeIdx, int timeIdx) item, Random rng)
     {
         var correct = item.English;
         var choices = new HashSet<string> { correct };
 
-        var attempts = new[] { 0, 1, 2 }.OrderBy(_ => rng.Next()).ToList();
-        // 0 = vary food, 1 = vary meal, 2 = vary subject
-
-        foreach (var attempt in attempts)
+        // If this is a weather item
+        if (item.weatherIdx >= 0 && item.placeIdx < 0 && item.timeIdx < 0)
         {
-            if (choices.Count >= 4) break;
+            var pool = Enumerable.Range(0, Weather.Length).Where(i => i != item.weatherIdx).OrderBy(_ => rng.Next()).ToList();
+            foreach (var i in pool)
+            {
+                if (choices.Count >= 4) break;
+                choices.Add($"{Weather[i].English}.");
+            }
+        }
+        // If this is a place item
+        else if (item.placeIdx >= 0 && item.weatherIdx < 0 && item.timeIdx < 0)
+        {
+            var pool = Enumerable.Range(0, Places.Length).Where(i => i != item.placeIdx).OrderBy(_ => rng.Next()).ToList();
+            foreach (var i in pool)
+            {
+                if (choices.Count >= 4) break;
+                choices.Add($"{Places[i].English}.");
+            }
+        }
+        // If this is a time/adverb item
+        else if (item.timeIdx >= 0 && item.weatherIdx < 0 && item.placeIdx < 0)
+        {
+            var pool = Enumerable.Range(0, Times.Length).Where(i => i != item.timeIdx).OrderBy(_ => rng.Next()).ToList();
+            foreach (var i in pool)
+            {
+                if (choices.Count >= 4) break;
+                choices.Add($"{Times[i].English}.");
+            }
+        }
+        else
+        {
+            // Fallback: if somehow multiple components are present, vary one of them
+            var attempts = new[] { 0, 1, 2 }.OrderBy(_ => rng.Next()).ToList();
+            foreach (var attempt in attempts)
+            {
+                if (choices.Count >= 4) break;
 
-            if (attempt == 0)
-            {
-                // vary food: keep subjIdx & mealIdx fixed; require food that supports same meal
-                var pool = Enumerable.Range(0, Foods.Length)
-                    .Where(fi => fi != item.foodIdx && Foods[fi].Meals.Contains(item.mealIdx))
-                    .OrderBy(_ => rng.Next()).ToList();
-                foreach (var fi in pool)
+                if (attempt == 0 && item.weatherIdx >= 0)
                 {
-                    if (choices.Count >= 4) break;
-                    choices.Add(FormatEnglish(item.subjIdx, fi, item.mealIdx));
+                    var pool = Enumerable.Range(0, Weather.Length).Where(i => i != item.weatherIdx).OrderBy(_ => rng.Next()).ToList();
+                    foreach (var i in pool)
+                    {
+                        if (choices.Count >= 4) break;
+                        choices.Add(FormatEnglish(i, item.placeIdx, item.timeIdx));
+                    }
                 }
-            }
-            else if (attempt == 1)
-            {
-                // vary meal: keep subjIdx & foodIdx fixed; prefer other meals that this food supports
-                var foodMeals = Foods[item.foodIdx].Meals.Where(m => m != item.mealIdx).OrderBy(_ => rng.Next()).ToList();
-                foreach (var mi in foodMeals)
+                else if (attempt == 1 && item.placeIdx >= 0)
                 {
-                    if (choices.Count >= 4) break;
-                    choices.Add(FormatEnglish(item.subjIdx, item.foodIdx, mi));
+                    var pool = Enumerable.Range(0, Places.Length).Where(i => i != item.placeIdx).OrderBy(_ => rng.Next()).ToList();
+                    foreach (var i in pool)
+                    {
+                        if (choices.Count >= 4) break;
+                        choices.Add(FormatEnglish(item.weatherIdx, i, item.timeIdx));
+                    }
                 }
-            }
-            else // attempt == 2
-            {
-                // vary subject: keep foodIdx & mealIdx fixed; prefer subjects from same verb group
-                var group = Subjects[item.subjIdx].VerbGroup;
-                var pool = Enumerable.Range(0, Subjects.Length)
-                    .Where(si => si != item.subjIdx && Subjects[si].VerbGroup == group)
-                    .OrderBy(_ => rng.Next()).ToList();
-                foreach (var si in pool)
+                else if (attempt == 2 && item.timeIdx >= 0)
                 {
-                    if (choices.Count >= 4) break;
-                    choices.Add(FormatEnglish(si, item.foodIdx, item.mealIdx));
+                    var pool = Enumerable.Range(0, Times.Length).Where(i => i != item.timeIdx).OrderBy(_ => rng.Next()).ToList();
+                    foreach (var i in pool)
+                    {
+                        if (choices.Count >= 4) break;
+                        choices.Add(FormatEnglish(item.weatherIdx, item.placeIdx, i));
+                    }
                 }
             }
         }
 
-        // Fill remaining slots with constrained random candidates (change only one component)
+        // Fill remaining slots by sampling same-category items (safe fallback)
         var fillAttempts = 0;
-        while (choices.Count < 4 && fillAttempts < 200)
+        while (choices.Count < 4 && fillAttempts++ < 200)
         {
-            fillAttempts++;
-            var comp = rng.Next(3);
-            int si = item.subjIdx, fi = item.foodIdx, mi = item.mealIdx;
-            if (comp == 0)
+            if (item.weatherIdx >= 0)
             {
-                // change food but keep same meal
-                var pool = Enumerable.Range(0, Foods.Length).Where(i => Foods[i].Meals.Contains(item.mealIdx)).ToList();
-                fi = pool[rng.Next(pool.Count)];
+                var i = rng.Next(Weather.Length);
+                choices.Add($"{Weather[i].English}.");
             }
-            else if (comp == 1)
+            else if (item.placeIdx >= 0)
             {
-                // change meal to one the food supports (or random if none)
-                var alternatives = Foods[item.foodIdx].Meals.ToList();
-                if (alternatives.Count == 0)
-                    mi = rng.Next(Meals.Length);
-                else
-                    mi = alternatives[rng.Next(alternatives.Count)];
+                var i = rng.Next(Places.Length);
+                choices.Add($"{Places[i].English}.");
+            }
+            else if (item.timeIdx >= 0)
+            {
+                var i = rng.Next(Times.Length);
+                choices.Add($"{Times[i].English}.");
             }
             else
             {
-                // change subject, prefer same verb group
-                var group = Subjects[item.subjIdx].VerbGroup;
-                var pool = Enumerable.Range(0, Subjects.Length).Where(i => Subjects[i].VerbGroup == group).ToList();
-                si = pool[rng.Next(pool.Count)];
+                // last resort
+                choices.Add("...");
             }
-
-            var candidate = FormatEnglish(si, fi, mi);
-            if (candidate != correct) choices.Add(candidate);
         }
 
         return choices.OrderBy(_ => rng.Next()).ToList();
     }
 
-    static string FormatEnglish(int subjIdx, int foodIdx, int mealIdx)
+    static string FormatEnglish(int weatherIdx, int placeIdx, int timeIdx)
     {
-        var subj = Subjects[subjIdx].English;
-        var food = Foods[foodIdx].English;
-        var meal = Meals[mealIdx].English;
-        return $"{subj} {food} {meal}.";
+        var parts = new List<string>();
+        if (weatherIdx >= 0) parts.Add(Weather[weatherIdx].English);
+        if (placeIdx   >= 0) parts.Add(Places[placeIdx].English);
+        if (timeIdx    >= 0) parts.Add(Times[timeIdx].English);
+        var sentence = string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+        if (!sentence.EndsWith(".")) sentence += ".";
+        return sentence;
     }
 
-    static void DrawComponentProgress(int learnedSubj, int totalSubj, int learnedFood, int totalFood, int learnedMeal, int totalMeal)
+    static void DrawComponentProgress(int learnedWeather, int totalWeather, int learnedPlaces, int totalPlaces, int learnedTimes, int totalTimes)
     {
-        // Render three ASCII progress bars (Subjects, Foods, Meals)
+        // Render three ASCII progress bars (Weather, Places, Times)
         Console.WriteLine();
-        DrawProgressBar("Subjects:", learnedSubj, totalSubj, 24);
-        DrawProgressBar("Foods:",    learnedFood,  totalFood,  24);
-        DrawProgressBar("Meals:",    learnedMeal,  totalMeal,  24);
+        DrawProgressBar("Weather:", learnedWeather, totalWeather, 24);
+        DrawProgressBar("Places:",  learnedPlaces, totalPlaces, 24);
+        DrawProgressBar("Times:",   learnedTimes,  totalTimes,  24);
         Console.WriteLine();
     }
 
@@ -401,9 +369,9 @@ class Program
     {
         Console.ForegroundColor = ConsoleColor.Magenta;
         Console.WriteLine("╔════════════════════════════════════════════════╗");
-        Console.WriteLine("║     French sentence → English multiple choice  ║");
+        Console.WriteLine("║     French vocabulary → English multiple choice ║");
         Console.WriteLine("╚════════════════════════════════════════════════╝");
         Console.ResetColor();
-        Console.WriteLine("Translate the French sentence shown into natural English.\n");
+        Console.WriteLine("Translate the French item shown into natural English.\n");
     }
 }
