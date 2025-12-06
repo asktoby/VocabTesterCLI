@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 
 class Program
 {
@@ -28,10 +30,18 @@ class Program
 
     enum QuizState { NeedEnglish, NeedFrench }
 
+    // Shared state for the countdown timer
+    static readonly object ConsoleLock = new();
+    static DateTime _countdownEndUtc;
+    static volatile bool _countdownExpired;
+
     static void Main()
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         var rng = new Random();
+
+        // start a 30 minute countdown that is shown on-screen and will stop the app when it reaches zero
+        StartCountdown(TimeSpan.FromMinutes(30));
 
         // Start by testing French -> English first (multiple choice).
         // After correct, require English -> French (typed) before eliminating.
@@ -45,10 +55,18 @@ class Program
 
         while (remaining.Count > 0)
         {
+            // If timer expired, stop immediately (background task also calls Environment.Exit, but check here too)
+            if (_countdownExpired)
+                break;
+
             var order = remaining.Keys.OrderBy(_ => rng.Next()).ToList();
 
             foreach (var key in order)
             {
+                // If timer expired, stop immediately
+                if (_countdownExpired)
+                    break;
+
                 // item may have been removed earlier in this pass
                 if (!remaining.TryGetValue(key, out var state))
                     continue;
@@ -196,14 +214,105 @@ class Program
             // Loop continues until remaining is empty; incorrect answers remain unchanged
         }
 
-        // Final clear + banner + celebration
-        Console.Clear();
-        PrintBanner();
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\n🌈 All words answered correctly both ways! You're a vocab superstar! 🦄✨");
-        Console.ResetColor();
-        Console.WriteLine("Press any key to exit...");
-        Console.ReadKey();
+        // Final clear + banner + celebration (if timer hasn't already ended)
+        if (!_countdownExpired)
+        {
+            Console.Clear();
+            PrintBanner();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("\n🌈 All words answered correctly both ways! You're a vocab superstar! 🦄✨");
+            Console.ResetColor();
+            Console.WriteLine("Press any key to exit...");
+            Console.ReadKey();
+        }
+    }
+
+    static void StartCountdown(TimeSpan duration)
+    {
+        _countdownEndUtc = DateTime.UtcNow + duration;
+        _countdownExpired = false;
+
+        // Run the timer loop on a background task so it can update the display live even while the main thread is blocked on input.
+        Task.Run(() =>
+        {
+            try
+            {
+                while (true)
+                {
+                    var remaining = _countdownEndUtc - DateTime.UtcNow;
+                    if (remaining <= TimeSpan.Zero)
+                    {
+                        // mark expired and show final message
+                        _countdownExpired = true;
+                        lock (ConsoleLock)
+                        {
+                            try
+                            {
+                                Console.Clear();
+                                PrintBanner();
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                Console.WriteLine("\n⏰ Time's up — well done! You've completed the session. 🎉\n");
+                                Console.ResetColor();
+                            }
+                            catch { }
+                        }
+                        // Give the user a brief moment to read the message, then exit.
+                        Thread.Sleep(1500);
+                        Environment.Exit(0);
+                        break;
+                    }
+
+                    // Show minutes only (no hours or seconds)
+                    var minutesLeft = Math.Max(0, (int)Math.Ceiling(remaining.TotalMinutes));
+                    var text = $"Time left: {minutesLeft} min";
+
+                    lock (ConsoleLock)
+                    {
+                        try
+                        {
+                            int width = 0;
+                            try { width = Console.WindowWidth; } catch { width = 80; }
+                            // adjust column so the minutes display fits on the right
+                            int col = Math.Max(0, width - 20);
+                            int row = 0;
+                            int curLeft = 0;
+                            int curTop = 0;
+                            try
+                            {
+                                curLeft = Console.CursorLeft;
+                                curTop = Console.CursorTop;
+                            }
+                            catch { /* ignore if console not available */ }
+
+                            try
+                            {
+                                Console.SetCursorPosition(col, row);
+                                Console.ForegroundColor = ConsoleColor.Cyan;
+                                // pad to clear previous content in that area
+                                var padded = text.PadRight(18);
+                                Console.Write(padded);
+                                Console.ResetColor();
+                            }
+                            catch { /* ignore if setting cursor fails */ }
+
+                            try
+                            {
+                                Console.SetCursorPosition(curLeft, curTop);
+                            }
+                            catch { /* ignore */ }
+                        }
+                        catch { /* ignore all console errors to avoid crashing timer */ }
+                    }
+
+                    // update once per second (minutes display will only visibly change once per minute)
+                    Thread.Sleep(1000);
+                }
+            }
+            catch
+            {
+                // swallow exceptions from background timer to avoid crashing the app
+            }
+        });
     }
 
     static string GetGenderHint(string french)
