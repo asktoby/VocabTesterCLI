@@ -28,6 +28,31 @@ class Program
         ("parfois", "sometimes"),
     };
 
+    // simple category mapping so multiple-choice distractors come from the same category
+    static readonly Dictionary<string, string> CategoryByFrench = new()
+    {
+        // weather
+        { "il fait beau", "weather" },
+        { "il fait chaud", "weather" },
+        { "il y a du soleil", "weather" },
+        { "il fait froid", "weather" },
+        { "il fait mauvais", "weather" },
+        { "il pleut", "weather" },
+        { "il neige", "weather" },
+
+        // places
+        { "à la maison", "places" },
+        { "au collège", "places" },
+        { "au gymnase", "places" },
+        { "à la plage", "places" },
+
+        // frequency / adverbs
+        { "d'habitude", "frequency" },
+        { "en général", "frequency" },
+        { "normalement", "frequency" },
+        { "parfois", "frequency" },
+    };
+
     enum QuizState { NeedEnglish, NeedFrench }
 
     // Shared state for the countdown timer
@@ -93,35 +118,61 @@ class Program
                 if (state == QuizState.NeedEnglish)
                 {
                     // Ask for English meaning (multiple choice): French -> English
-                    var choices = Vocab.Select(v => v.English).Distinct().OrderBy(_ => rng.Next()).ToList();
-                    if (!choices.Contains(key.English))
-                        choices.Add(key.English);
+                    // Build distractors only from the same category as the correct answer.
+                    var correctEnglish = key.English;
 
-                    choices = choices.Where(c => c != key.English).Take(3).Append(key.English).OrderBy(_ => rng.Next()).ToList();
+                    CategoryByFrench.TryGetValue(key.French, out var correctCategory);
+
+                    // related choices from same category (distinct English)
+                    var related = Vocab
+                        .Where(v => CategoryByFrench.TryGetValue(v.French, out var c) && c == correctCategory)
+                        .Select(v => v.English)
+                        .Distinct()
+                        .ToList();
+
+                    if (!related.Contains(correctEnglish))
+                        related.Add(correctEnglish);
+
+                    // remove correct for selection of distractors
+                    var distractors = related.Where(e => e != correctEnglish).OrderBy(_ => rng.Next()).ToList();
+
+                    // If not enough related distractors, fill from the global pool (still avoid mixing categories if possible, but fallback allowed)
+                    if (distractors.Count < 3)
+                    {
+                        var globalPool = Vocab.Select(v => v.English).Distinct().Where(e => e != correctEnglish && !distractors.Contains(e)).OrderBy(_ => rng.Next()).ToList();
+                        foreach (var g in globalPool)
+                        {
+                            distractors.Add(g);
+                            if (distractors.Count >= 3) break;
+                        }
+                    }
+
+                    // take up to 3 distractors, then append the correct answer and shuffle
+                    var finalChoices = distractors.Take(3).Append(correctEnglish).OrderBy(_ => rng.Next()).ToList();
 
                     Console.ForegroundColor = ConsoleColor.Cyan;
                     Console.WriteLine($"\n🌟 What is the English for \"{key.French}\"? 🌟");
                     Console.ResetColor();
-                    for (int i = 0; i < choices.Count; i++)
+                    for (int i = 0; i < finalChoices.Count; i++)
                     {
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         Console.Write($" {i + 1}. ");
                         Console.ResetColor();
-                        Console.WriteLine($"{choices[i]}");
+                        Console.WriteLine($"{finalChoices[i]}");
                     }
 
                     Console.ForegroundColor = ConsoleColor.Magenta;
                     Console.Write("Pick your answer (1-4): ");
                     Console.ResetColor();
                     var input = Console.ReadLine();
-                    if (!int.TryParse(input, out int selected) || selected < 1 || selected > choices.Count)
+                    if (!int.TryParse(input, out int selected) || selected < 1 || selected > finalChoices.Count)
                     {
                         // invalid - mark as wrong for this round and show correction next question (red)
-                        lastFeedback = ($"Invalid choice — correct: {key.English} (French: \"{key.French}\")", ConsoleColor.Red);
+                        lastFeedback = ($"Invalid choice — correct: {correctEnglish} (French: \"{key.French}\")", ConsoleColor.Red);
                         continue;
                     }
 
-                    if (choices[selected - 1] == key.English)
+                    if (finalChoices[selected - 1] == correctEnglish)
                     {
                         // don't pause — show congrats (green) with next question
                         lastFeedback = ("Correct! 🎉✨", ConsoleColor.Green);
@@ -130,7 +181,7 @@ class Program
                     else
                     {
                         // immediate correction shown on next question (red) and include the French being tested
-                        lastFeedback = ($"Wrong — correct: {key.English} (French: \"{key.French}\")", ConsoleColor.Red);
+                        lastFeedback = ($"Wrong — correct: {correctEnglish} (French: \"{key.French}\")", ConsoleColor.Red);
                         // counted as wrong this pass
                         continue;
                     }
