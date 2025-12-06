@@ -74,7 +74,10 @@ class Program
 
         // store text + color for feedback shown with next question
         (string Text, ConsoleColor Color)? lastFeedback = null;
-        var total = Vocab.Length;
+
+        // totalWords remains number of vocabulary items; totalSteps counts both directions
+        var totalWords = Vocab.Length;
+        var totalSteps = totalWords * 2;
 
         PrintBanner();
 
@@ -100,9 +103,15 @@ class Program
                 Console.Clear();
                 PrintBanner();
 
-                // Show progress (learned vs remaining)
-                var learned = total - remaining.Count;
-                DrawProgressBar(learned, total, 30);
+                // Show progress (learned vs remaining) — count steps completed:
+                // 0 = not seen yet, 1 = French->English done (NeedFrench), 2 = fully learned (removed from remaining)
+                int learnedSteps = Vocab.Sum(v =>
+                {
+                    if (!remaining.ContainsKey(v)) return 2;
+                    return remaining[v] == QuizState.NeedFrench ? 1 : 0;
+                });
+
+                DrawProgressBar(learnedSteps, totalSteps, 30);
 
                 if (lastFeedback.HasValue)
                 {
@@ -176,7 +185,13 @@ class Program
                     {
                         // don't pause — show congrats (green) with next question
                         lastFeedback = ("Correct! 🎉✨", ConsoleColor.Green);
-                        correct = true;
+
+                        // mark English-side as done: move to NeedFrench (this counts as one step done)
+                        remaining[key] = QuizState.NeedFrench;
+
+                        correct = false; // don't remove yet — removal only after French typed
+                        // we set correct=false because removal (and full completion) happens when the user types French later.
+                        // progress bar already updated above using the 'NeedFrench' state mapping.
                     }
                     else
                     {
@@ -208,7 +223,9 @@ class Program
                     {
                         // success — show congrats (green) with next question and mark as learned
                         lastFeedback = ("Magnifique! You got the French right! 🥳🥐", ConsoleColor.Green);
-                        correct = true;
+                        // remove permanently (this completes the second step)
+                        remaining.Remove(key);
+                        correct = false; // not needed — removal already performed
                     }
                     else
                     {
@@ -217,7 +234,7 @@ class Program
                         Console.WriteLine($"Aww, not quite! The correct answer is \"{key.French}\". 🍬");
                         Console.ResetColor();
 
-                        // Ask user to type the correct form now (this is practice only; does not mark as learned)
+                        // Ask user to type the correct form now (this is practice only; does not mark learned)
                         while (true)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
@@ -241,23 +258,7 @@ class Program
                         }
                     }
 
-                    // If correctedButNotLearned is true we intentionally do NOT set correct = true,
-                    // so the item remains in 'remaining' and progress doesn't increment.
-                }
-
-                // If correct, advance state or remove
-                if (correct)
-                {
-                    if (state == QuizState.NeedEnglish)
-                    {
-                        // French->English passed; now require English->French
-                        remaining[key] = QuizState.NeedFrench;
-                    }
-                    else
-                    {
-                        // Both directions passed; remove permanently
-                        remaining.Remove(key);
-                    }
+                    // Note: learned steps update will be reflected on the next iteration because remaining was modified.
                 }
 
                 // Immediately continue to next question; lastFeedback will be displayed above it
