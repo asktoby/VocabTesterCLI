@@ -11,46 +11,78 @@ class Program
 {
     static readonly (string French, string English)[] Vocab = new[]
     {
-        ("il fait beau", "it is good weather"),
-        ("il fait chaud", "it is hot"),
-        ("il y a du soleil", "it is sunny"),
-        ("il fait froid", "it is cold"),
-        ("il fait mauvais", "it is bad weather"),
-        ("il pleut", "it rains"),
-        ("il neige", "it snows"),
-        ("à la maison", "at home"),
-        ("au collège", "at school"),
-        ("au gymnase", "at the gym"),
-        ("à la plage", "on the beach"),
-        ("d'habitude", "usually"),
-        ("en général", "in general"),
-        ("normalement", "normally"),
-        ("parfois", "sometimes"),
+        ("un chapeau", "a hat"),
+        ("un costume", "a suit"),
+        ("un haut", "a top"),
+        ("un jean", "a pair of jeans"),
+        ("un maillot de bain", "a swimsuit"),
+        ("un manteau", "a coat"),
+
+        ("un pantalon", "a pair of trousers"),
+        ("un pull", "a jumper"),
+        ("un short", "a pair of shorts"),
+        ("un survêtement", "a tracksuit"),
+        ("un tee-shirt", "a T-shirt"),
+        ("un uniforme", "a uniform"),
+
+        ("une casquette", "a cap"),
+        ("une chemise", "a shirt"),
+        ("une cravate", "a tie"),
+        ("une écharpe", "a scarf"),
+        ("une jupe", "a skirt"),
+        ("une montre", "a watch"),
+        ("une robe", "a dress"),
+        ("une veste", "a jacket"),
+
+        ("des gants", "gloves"),
+
+        ("des baskets", "trainers"),
+        ("des bottes", "boots"),
+        ("des chaussettes", "socks"),
+        ("des chaussures", "shoes"),
+        ("des tongs", "flip flops"),
+        ("des pantoufles", "slippers"),
+        ("des sandales", "sandals"),
     };
 
     // simple category mapping so multiple-choice distractors come from the same category
     static readonly Dictionary<string, string> CategoryByFrench = new()
     {
-        // weather
-        { "il fait beau", "weather" },
-        { "il fait chaud", "weather" },
-        { "il y a du soleil", "weather" },
-        { "il fait froid", "weather" },
-        { "il fait mauvais", "weather" },
-        { "il pleut", "weather" },
-        { "il neige", "weather" },
+        // clothing (tops, coats, suits)
+        { "un chapeau", "clothing" },
+        { "un costume", "clothing" },
+        { "un haut", "clothing" },
+        { "un jean", "clothing" },
+        { "un maillot de bain", "clothing" },
+        { "un manteau", "clothing" },
+        { "un pantalon", "clothing" },
+        { "un pull", "clothing" },
+        { "un short", "clothing" },
+        { "un survêtement", "clothing" },
+        { "un tee-shirt", "clothing" },
+        { "un uniforme", "clothing" },
 
-        // places
-        { "à la maison", "places" },
-        { "au collège", "places" },
-        { "au gymnase", "places" },
-        { "à la plage", "places" },
+        // shirts / dresses / jackets / accessories
+        { "une casquette", "accessory" },
+        { "une chemise", "clothing" },
+        { "une cravate", "accessory" },
+        { "une écharpe", "accessory" },
+        { "une jupe", "clothing" },
+        { "une montre", "accessory" },
+        { "une robe", "clothing" },
+        { "une veste", "clothing" },
 
-        // frequency / adverbs
-        { "d'habitude", "frequency" },
-        { "en général", "frequency" },
-        { "normalement", "frequency" },
-        { "parfois", "frequency" },
+        // gloves
+        { "des gants", "accessory" },
+
+        // footwear
+        { "des baskets", "footwear" },
+        { "des bottes", "footwear" },
+        { "des chaussettes", "footwear" },
+        { "des chaussures", "footwear" },
+        { "des tongs", "footwear" },
+        { "des pantoufles", "footwear" },
+        { "des sandales", "footwear" },
     };
 
     enum QuizState { NeedEnglish, NeedFrench }
@@ -204,10 +236,8 @@ class Program
                 else // NeedFrench
                 {
                     // Ask for French meaning (free text): English -> French
-                    // Include gender hint (male/female) in the prompt
-                    var genderHint = GetGenderHint(key.French);
                     Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"\n🌟 Type the French {genderHint} for \"{key.English}\"! 🌟");
+                    Console.WriteLine($"\n🌟 Type the French for \"{key.English}\"! 🌟");
                     Console.ResetColor();
 
                     // Track whether user corrected a shown answer; corrections should not mark the item as learned.
