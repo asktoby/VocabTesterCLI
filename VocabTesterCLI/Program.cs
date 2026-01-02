@@ -9,83 +9,38 @@ using System.Threading.Tasks;
 
 class Program
 {
-    static readonly (string French, string English)[] Vocab = new[]
+    // Simple representation of a transformation edge in the synthetic routes diagram
+    record Edge(string From, string To, string Reagent);
+
+    static readonly List<Edge> Edges = new()
     {
-        ("un chapeau", "a hat"),
-        ("un costume", "a suit"),
-        ("un haut", "a top"),
-        ("un jean", "a pair of jeans"),
-        ("un maillot de bain", "a swimsuit"),
-        ("un manteau", "a coat"),
+        new("Alkene", "Alkane", "150°C, H2 / Ni"),
+        new("Alkene", "Haloalkane", "Hydrogen halide, 20°C"),
+        new("Alkene", "Alcohol", "Steam / H3PO4, high T / pressure (hydration)"),
 
-        ("un pantalon", "a pair of trousers"),
-        ("un pull", "a jumper"),
-        ("un short", "a pair of shorts"),
-        ("un survêtement", "a tracksuit"),
-        ("un tee-shirt", "a T-shirt"),
-        ("un uniforme", "a uniform"),
+        new("Haloalkane", "Nitrile", "NaCN / KCN, reflux in ethanol"),
+        new("Haloalkane", "Amine", "Excess ethanolic NH3, heat"),
 
-        ("une casquette", "a cap"),
-        ("une chemise", "a shirt"),
-        ("une cravate", "a tie"),
-        ("une écharpe", "a scarf"),
-        ("une jupe", "a skirt"),
-        ("une montre", "a watch"),
-        ("une robe", "a dress"),
-        ("une veste", "a jacket"),
+        new("Alcohol (1°)", "Aldehyde", "K2Cr2O7 / H2SO4 (careful conditions)"),
+        new("Aldehyde", "Carboxylic acid", "K2Cr2O7 / H2SO4, reflux"),
+        new("Alcohol (1°)", "Carboxylic acid", "Strong oxidising agent (K2Cr2O7/H2SO4)"),
 
-        ("des gants", "gloves"),
+        new("Alcohol (2°)", "Ketone", "K2Cr2O7 / H2SO4, reflux"),
+        new("Ketone", "Hydroxynitrile", "HCN"),
+        new("Aldehyde", "Hydroxynitrile", "HCN"),
+        new("Hydroxynitrile", "Amine", "LiAlH4, dilute acid"),
 
-        ("des baskets", "trainers"),
-        ("des bottes", "boots"),
-        ("des chaussettes", "socks"),
-        ("des chaussures", "shoes"),
-        ("des tongs", "flip flops"),
-        ("des pantoufles", "slippers"),
-        ("des sandales", "sandals"),
+        new("Nitrile", "Amine", "H2 / Ni (or LiAlH4 / acid)") ,
+
+        new("Carboxylic acid", "Acyl chloride", "SOCl2"),
+        new("Acyl chloride", "Ester", "Alcohol, 20°C"),
+        new("Acyl chloride", "1° Amide", "NH3, 20°C"),
+        new("Acyl chloride", "2° Amide", "Primary amine, 20°C"),
+
+        new("Carboxylic acid", "Ester", "Alcohol, conc. H2SO4 (acid catalysis)"),
+        new("Ester", "Carboxylate", "OH- (saponification), heat"),
+        new("Carboxylate", "Carboxylic acid", "Dilute acid, heat"),
     };
-
-    // simple category mapping so multiple-choice distractors come from the same category
-    static readonly Dictionary<string, string> CategoryByFrench = new()
-    {
-        // clothing (tops, coats, suits)
-        { "un chapeau", "clothing" },
-        { "un costume", "clothing" },
-        { "un haut", "clothing" },
-        { "un jean", "clothing" },
-        { "un maillot de bain", "clothing" },
-        { "un manteau", "clothing" },
-        { "un pantalon", "clothing" },
-        { "un pull", "clothing" },
-        { "un short", "clothing" },
-        { "un survêtement", "clothing" },
-        { "un tee-shirt", "clothing" },
-        { "un uniforme", "clothing" },
-
-        // shirts / dresses / jackets / accessories
-        { "une casquette", "accessory" },
-        { "une chemise", "clothing" },
-        { "une cravate", "accessory" },
-        { "une écharpe", "accessory" },
-        { "une jupe", "clothing" },
-        { "une montre", "accessory" },
-        { "une robe", "clothing" },
-        { "une veste", "clothing" },
-
-        // gloves
-        { "des gants", "accessory" },
-
-        // footwear
-        { "des baskets", "footwear" },
-        { "des bottes", "footwear" },
-        { "des chaussettes", "footwear" },
-        { "des chaussures", "footwear" },
-        { "des tongs", "footwear" },
-        { "des pantoufles", "footwear" },
-        { "des sandales", "footwear" },
-    };
-
-    enum QuizState { NeedEnglish, NeedFrench }
 
     // Shared state for the countdown timer
     static readonly object ConsoleLock = new();
@@ -100,212 +55,120 @@ class Program
         // start a 30 minute countdown that is shown on-screen and will stop the app when it reaches zero
         StartCountdown(TimeSpan.FromMinutes(30));
 
-        // Start by testing French -> English first (multiple choice).
-        // After correct, require English -> French (typed) before eliminating.
-        var remaining = Vocab.ToDictionary(v => v, v => QuizState.NeedEnglish);
+        PrintBanner();
 
-        // store text + color for feedback shown with next question
+        Console.WriteLine("Choose mode:");
+        Console.WriteLine("  1) Quiz: pick reagent/conditions for a transformation");
+        Console.WriteLine("  2) Explore: list all transformations in the diagram");
+        Console.Write("Mode (1-2): ");
+        var mode = Console.ReadLine()?.Trim() ?? "";
+        if (mode == "2")
+        {
+            ExploreDiagram();
+            Console.WriteLine("Press any key to exit...");
+            Console.ReadKey();
+            return;
+        }
+
+        // Default to quiz mode
+        var remaining = new List<Edge>(Edges);
         (string Text, ConsoleColor Color)? lastFeedback = null;
 
-        // totalWords remains number of vocabulary items; totalSteps counts both directions
-        var totalWords = Vocab.Length;
-        var totalSteps = totalWords * 2;
-
-        PrintBanner();
+        var total = remaining.Count;
 
         while (remaining.Count > 0)
         {
-            // If timer expired, stop immediately (background task also calls Environment.Exit, but check here too)
-            if (_countdownExpired)
-                break;
+            if (_countdownExpired) break;
 
-            var order = remaining.Keys.OrderBy(_ => rng.Next()).ToList();
+            Console.Clear();
+            PrintBanner();
 
-            foreach (var key in order)
+            int completed = total - remaining.Count;
+            DrawProgressBar(completed, total, 30);
+
+            if (lastFeedback.HasValue)
             {
-                // If timer expired, stop immediately
-                if (_countdownExpired)
-                    break;
-
-                // item may have been removed earlier in this pass
-                if (!remaining.TryGetValue(key, out var state))
-                    continue;
-
-                // Clear and show banner + last feedback before each question
-                Console.Clear();
-                PrintBanner();
-
-                // Show progress (learned vs remaining) — count steps completed:
-                // 0 = not seen yet, 1 = French->English done (NeedFrench), 2 = fully learned (removed from remaining)
-                int learnedSteps = Vocab.Sum(v =>
-                {
-                    if (!remaining.ContainsKey(v)) return 2;
-                    return remaining[v] == QuizState.NeedFrench ? 1 : 0;
-                });
-
-                DrawProgressBar(learnedSteps, totalSteps, 30);
-
-                if (lastFeedback.HasValue)
-                {
-                    Console.ForegroundColor = lastFeedback.Value.Color;
-                    Console.WriteLine(lastFeedback.Value.Text);
-                    Console.ResetColor();
-                    Console.WriteLine();
-                    lastFeedback = null;
-                }
-
-                bool correct = false;
-
-                if (state == QuizState.NeedEnglish)
-                {
-                    // Ask for English meaning (multiple choice): French -> English
-                    // Build distractors only from the same category as the correct answer.
-                    var correctEnglish = key.English;
-
-                    CategoryByFrench.TryGetValue(key.French, out var correctCategory);
-
-                    // related choices from same category (distinct English)
-                    var related = Vocab
-                        .Where(v => CategoryByFrench.TryGetValue(v.French, out var c) && c == correctCategory)
-                        .Select(v => v.English)
-                        .Distinct()
-                        .ToList();
-
-                    if (!related.Contains(correctEnglish))
-                        related.Add(correctEnglish);
-
-                    // remove correct for selection of distractors
-                    var distractors = related.Where(e => e != correctEnglish).OrderBy(_ => rng.Next()).ToList();
-
-                    // If not enough related distractors, fill from the global pool (still avoid mixing categories if possible, but fallback allowed)
-                    if (distractors.Count < 3)
-                    {
-                        var globalPool = Vocab.Select(v => v.English).Distinct().Where(e => e != correctEnglish && !distractors.Contains(e)).OrderBy(_ => rng.Next()).ToList();
-                        foreach (var g in globalPool)
-                        {
-                            distractors.Add(g);
-                            if (distractors.Count >= 3) break;
-                        }
-                    }
-
-                    // take up to 3 distractors, then append the correct answer and shuffle
-                    var finalChoices = distractors.Take(3).Append(correctEnglish).OrderBy(_ => rng.Next()).ToList();
-
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"\n🌟 What is the English for \"{key.French}\"? 🌟");
-                    Console.ResetColor();
-                    for (int i = 0; i < finalChoices.Count; i++)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.Write($" {i + 1}. ");
-                        Console.ResetColor();
-                        Console.WriteLine($"{finalChoices[i]}");
-                    }
-
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.Write("Pick your answer (1-4): ");
-                    Console.ResetColor();
-                    var input = Console.ReadLine();
-                    if (!int.TryParse(input, out int selected) || selected < 1 || selected > finalChoices.Count)
-                    {
-                        // invalid - mark as wrong for this round and show correction next question (red)
-                        lastFeedback = ($"Invalid choice — correct: {correctEnglish} (French: \"{key.French}\")", ConsoleColor.Red);
-                        continue;
-                    }
-
-                    if (finalChoices[selected - 1] == correctEnglish)
-                    {
-                        // don't pause — show congrats (green) with next question
-                        lastFeedback = ("Correct! 🎉✨", ConsoleColor.Green);
-
-                        // mark English-side as done: move to NeedFrench (this counts as one step done)
-                        remaining[key] = QuizState.NeedFrench;
-
-                        correct = false; // don't remove yet — removal only after French typed
-                        // we set correct=false because removal (and full completion) happens when the user types French later.
-                        // progress bar already updated above using the 'NeedFrench' state mapping.
-                    }
-                    else
-                    {
-                        // immediate correction shown on next question (red) and include the French being tested
-                        lastFeedback = ($"Wrong — correct: {correctEnglish} (French: \"{key.French}\")", ConsoleColor.Red);
-                        // counted as wrong this pass
-                        continue;
-                    }
-                }
-                else // NeedFrench
-                {
-                    // Ask for French meaning (free text): English -> French
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"\n🌟 Type the French for \"{key.English}\"! 🌟");
-                    Console.ResetColor();
-
-                    // Track whether user corrected a shown answer; corrections should not mark the item as learned.
-                    bool correctedButNotLearned = false;
-
-                    // First attempt (if correct immediately => learned); otherwise show correct, require typing it, but do not mark learned.
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.Write("Your answer: ");
-                    Console.ResetColor();
-                    var firstInput = Console.ReadLine()?.Trim() ?? "";
-
-                    if (AreEquivalentFrench(firstInput, key.French))
-                    {
-                        // success — show congrats (green) with next question and mark as learned
-                        lastFeedback = ("Magnifique! You got the French right! 🥳🥐", ConsoleColor.Green);
-                        // remove permanently (this completes the second step)
-                        remaining.Remove(key);
-                        correct = false; // not needed — removal already performed
-                    }
-                    else
-                    {
-                        // Wrong: show correct answer immediately (red), then require user to type it correctly
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"Aww, not quite! The correct answer is \"{key.French}\". 🍬");
-                        Console.ResetColor();
-
-                        // Ask user to type the correct form now (this is practice only; does not mark learned)
-                        while (true)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.Write("Please type the correct French word now (accents optional): ");
-                            Console.ResetColor();
-
-                            var confirm = Console.ReadLine()?.Trim() ?? "";
-                            if (AreEquivalentFrench(confirm, key.French))
-                            {
-                                correctedButNotLearned = true;
-                                lastFeedback = ("Thanks — that's correct. You'll be retested later. 🥖", ConsoleColor.Yellow);
-                                break;
-                            }
-                            else
-                            {
-                                Console.ForegroundColor = ConsoleColor.Red;
-                                Console.WriteLine("That's still not correct. Let's try again.");
-                                Console.ResetColor();
-                                // loop remains until correct
-                            }
-                        }
-                    }
-
-                    // Note: learned steps update will be reflected on the next iteration because remaining was modified.
-                }
-
-                // Immediately continue to next question; lastFeedback will be displayed above it
+                Console.ForegroundColor = lastFeedback.Value.Color;
+                Console.WriteLine(lastFeedback.Value.Text);
+                Console.ResetColor();
+                Console.WriteLine();
+                lastFeedback = null;
             }
-            // Loop continues until remaining is empty; incorrect answers remain unchanged
+
+            // pick a random transformation
+            var idx = rng.Next(remaining.Count);
+            var edge = remaining[idx];
+
+            // build choices: correct reagent + distractors
+            var allReagents = Edges.Select(e => e.Reagent).Distinct().Where(r => r != edge.Reagent).ToList();
+            var distractors = allReagents.OrderBy(_ => rng.Next()).Take(3).ToList();
+            var choices = new List<string>(distractors) { edge.Reagent };
+            choices = choices.OrderBy(_ => rng.Next()).ToList();
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"\n🌟 What reagent/conditions convert '{edge.From}' to '{edge.To}'? 🌟");
+            Console.ResetColor();
+
+            for (int i = 0; i < choices.Count; i++)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write($" {i + 1}. ");
+                Console.ResetColor();
+                Console.WriteLine(choices[i]);
+            }
+
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.Write("Pick your answer (1-4): ");
+            Console.ResetColor();
+            var input = Console.ReadLine();
+            if (!int.TryParse(input, out int selected) || selected < 1 || selected > choices.Count)
+            {
+                lastFeedback = ($"Invalid choice — correct: {edge.Reagent} ({edge.From} → {edge.To})", ConsoleColor.Red);
+                continue;
+            }
+
+            if (choices[selected - 1] == edge.Reagent)
+            {
+                lastFeedback = ("Correct! 🎉", ConsoleColor.Green);
+                // mark learned
+                remaining.RemoveAt(idx);
+            }
+            else
+            {
+                lastFeedback = ($"Wrong — correct: {edge.Reagent} ({edge.From} → {edge.To})", ConsoleColor.Red);
+                // keep edge for later
+            }
         }
 
-        // Final clear + banner + celebration (if timer hasn't already ended)
         if (!_countdownExpired)
         {
             Console.Clear();
             PrintBanner();
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("\n🌈 All words answered correctly both ways! You're a vocab superstar! 🦄✨");
+            Console.WriteLine("\n🌈 You've practiced all the transformations! Well done. 🎉\n");
             Console.ResetColor();
             Console.WriteLine("Press any key to exit...");
             Console.ReadKey();
+        }
+    }
+
+    static void ExploreDiagram()
+    {
+        Console.Clear();
+        PrintBanner();
+        Console.WriteLine("Synthetic routes — grouped by starting compound:\n");
+
+        var groups = Edges.GroupBy(e => e.From).OrderBy(g => g.Key);
+        foreach (var g in groups)
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine(g.Key + ":");
+            Console.ResetColor();
+            foreach (var e in g)
+            {
+                Console.WriteLine($"  -> {e.To}    [{e.Reagent}]");
+            }
+            Console.WriteLine();
         }
     }
 
