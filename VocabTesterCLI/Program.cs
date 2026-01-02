@@ -319,6 +319,8 @@ class Program
         {
             try
             {
+                var totalSeconds = Math.Max(1.0, duration.TotalSeconds);
+                const int barWidth = 20;
                 while (true)
                 {
                     var remaining = _countdownEndUtc - DateTime.UtcNow;
@@ -344,9 +346,13 @@ class Program
                         break;
                     }
 
-                    // Show minutes only (no hours or seconds)
-                    var minutesLeft = Math.Max(0, (int)Math.Ceiling(remaining.TotalMinutes));
-                    var text = $"Time left: {minutesLeft} min";
+                    // Draw a shrinking progress bar representing remaining time
+                    var remainingSeconds = Math.Max(0.0, remaining.TotalSeconds);
+                    var ratio = remainingSeconds / totalSeconds;
+                    var filled = (int)Math.Round(ratio * barWidth);
+                    filled = Math.Min(Math.Max(filled, 0), barWidth);
+                    var bar = new string('█', filled) + new string('─', barWidth - filled);
+                    var text = $"Timer: [{bar}]";
 
                     lock (ConsoleLock)
                     {
@@ -354,8 +360,8 @@ class Program
                         {
                             int width = 0;
                             try { width = Console.WindowWidth; } catch { width = 80; }
-                            // adjust column so the minutes display fits on the right
-                            int col = Math.Max(0, width - 20);
+                            // position so the bar appears at the top-right
+                            int col = Math.Max(0, width - (text.Length + 2));
                             int row = 0;
                             int curLeft = 0;
                             int curTop = 0;
@@ -371,7 +377,7 @@ class Program
                                 Console.SetCursorPosition(col, row);
                                 Console.ForegroundColor = ConsoleColor.Cyan;
                                 // pad to clear previous content in that area
-                                var padded = text.PadRight(18);
+                                var padded = text.PadRight(text.Length + 1);
                                 Console.Write(padded);
                                 Console.ResetColor();
                             }
@@ -386,8 +392,8 @@ class Program
                         catch { /* ignore all console errors to avoid crashing timer */ }
                     }
 
-                    // update once per second (minutes display will only visibly change once per minute)
-                    Thread.Sleep(1000);
+                    // update every 15 seconds to avoid flicker (minutes-level precision not needed)
+                    Thread.Sleep(15000);
                 }
             }
             catch
