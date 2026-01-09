@@ -9,81 +9,12 @@ using System.Threading.Tasks;
 
 class Program
 {
-    static readonly (string French, string English)[] Vocab = new[]
-    {
-        ("un chapeau", "a hat"),
-        ("un costume", "a suit"),
-        ("un haut", "a top"),
-        ("un jean", "a pair of jeans"),
-        ("un maillot de bain", "a swimsuit"),
-        ("un manteau", "a coat"),
-
-        ("un pantalon", "a pair of trousers"),
-        ("un pull", "a jumper"),
-        ("un short", "a pair of shorts"),
-        ("un survêtement", "a tracksuit"),
-        ("un tee-shirt", "a T-shirt"),
-        ("un uniforme", "a uniform"),
-
-        ("une casquette", "a cap"),
-        ("une chemise", "a shirt"),
-        ("une cravate", "a tie"),
-        ("une écharpe", "a scarf"),
-        ("une jupe", "a skirt"),
-        ("une montre", "a watch"),
-        ("une robe", "a dress"),
-        ("une veste", "a jacket"),
-
-        ("des gants", "gloves"),
-
-        ("des baskets", "trainers"),
-        ("des bottes", "boots"),
-        ("des chaussettes", "socks"),
-        ("des chaussures", "shoes"),
-        ("des tongs", "flip flops"),
-        ("des pantoufles", "slippers"),
-        ("des sandales", "sandals"),
-    };
+    // Build vocab from conjugations of "jouer" + activity/object phrases
+    static readonly (string French, string English)[] Vocab = BuildVocab();
 
     // simple category mapping so multiple-choice distractors come from the same category
-    static readonly Dictionary<string, string> CategoryByFrench = new()
-    {
-        // clothing (tops, coats, suits)
-        { "un chapeau", "clothing" },
-        { "un costume", "clothing" },
-        { "un haut", "clothing" },
-        { "un jean", "clothing" },
-        { "un maillot de bain", "clothing" },
-        { "un manteau", "clothing" },
-        { "un pantalon", "clothing" },
-        { "un pull", "clothing" },
-        { "un short", "clothing" },
-        { "un survêtement", "clothing" },
-        { "un tee-shirt", "clothing" },
-        { "un uniforme", "clothing" },
-
-        // shirts / dresses / jackets / accessories
-        { "une casquette", "accessory" },
-        { "une chemise", "clothing" },
-        { "une cravate", "accessory" },
-        { "une écharpe", "accessory" },
-        { "une jupe", "clothing" },
-        { "une montre", "accessory" },
-        { "une robe", "clothing" },
-        { "une veste", "clothing" },
-
-        // gloves
-        { "des gants", "accessory" },
-
-        // footwear
-        { "des baskets", "footwear" },
-        { "des bottes", "footwear" },
-        { "des chaussettes", "footwear" },
-        { "des chaussures", "footwear" },
-        { "des tongs", "footwear" },
-        { "des pantoufles", "footwear" },
-        { "des sandales", "footwear" },
-    };
+    // Category map created dynamically to group distractors (sports, music, games, social)
+    static readonly Dictionary<string, string> CategoryByFrench = BuildCategoryMap(Vocab);
 
     enum QuizState { NeedEnglish, NeedFrench }
 
@@ -501,5 +432,72 @@ class Program
             }
             Console.ResetColor();
         }
+    }
+
+    static (string French, string English)[] BuildVocab()
+    {
+        var subjects = new (string FrenchSubject, string EnglishSubject, string Conjugation)[ ]
+        {
+            ("Je", "I", "joue"),
+            ("Tu", "You", "joues"),
+            ("Il", "He", "joue"),
+            ("Elle", "She", "joue"),
+            ("On", "One", "joue"),
+            ("Nous", "We", "jouons"),
+            ("Vous", "You all", "jouez"),
+            ("Ils", "They (m)", "jouent"),
+            ("Elles", "They (f)", "jouent"),
+        };
+
+        var activities = new (string FrenchPhrase, string EnglishPhrase, string Category)[]
+        {
+            ("au basket", "basketball", "sports"),
+            ("au foot", "football", "sports"),
+            ("au tennis", "tennis", "sports"),
+            ("aux cartes", "cards", "games"),
+            ("aux échecs", "chess", "games"),
+
+            ("avec des amis", "with some friends", "social"),
+
+            ("de la batterie", "the drums", "music"),
+            ("du clavier", "the keyboard", "music"),
+            ("de la guitare", "the guitar", "music"),
+            ("du piano", "the piano", "music"),
+        };
+
+        // We want to focus on the nouns (activities). Pick one random subject/conjugation per activity
+        var rng = new Random();
+        var list = new List<(string French, string English)>();
+        foreach (var act in activities)
+        {
+            var subj = subjects[rng.Next(subjects.Length)];
+            // build French: e.g. "Je joue au basket"
+            var french = $"{subj.FrenchSubject} {subj.Conjugation} {act.FrenchPhrase}".Trim();
+            // build English: e.g. "I play basketball" or "He plays the guitar"
+            var verb = subj.EnglishSubject switch
+            {
+                "He" or "She" or "One" => "plays",
+                _ => "play",
+            };
+            var english = $"{subj.EnglishSubject} {verb} {act.EnglishPhrase}".Trim();
+            list.Add((french, english));
+        }
+
+        return list.ToArray();
+    }
+
+    static Dictionary<string, string> BuildCategoryMap((string French, string English)[] vocab)
+    {
+        var map = new Dictionary<string, string>();
+        foreach (var (french, english) in vocab)
+        {
+            var cat = "other";
+            if (french.Contains("basket") || french.Contains("foot") || french.Contains("tennis")) cat = "sports";
+            else if (french.Contains("cartes") || french.Contains("échecs")) cat = "games";
+            else if (french.Contains("amis")) cat = "social";
+            else if (french.Contains("batterie") || french.Contains("guitare") || french.Contains("clavier") || french.Contains("piano")) cat = "music";
+            map[french] = cat;
+        }
+        return map;
     }
 }
