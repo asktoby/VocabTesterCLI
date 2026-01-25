@@ -128,10 +128,33 @@ class Program
         new Meal("tous les week-ends", "every weekend"),
     };
 
+    // Timer state
+    static DateTime s_endTime;
+    static volatile bool s_timeUp;
+    static readonly object s_consoleLock = new();
+    static System.Threading.Timer? s_displayTimer;
+
     static void Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
         var rng = new Random();
+
+        // Start 20-minute timer
+        s_endTime = DateTime.UtcNow.AddMinutes(20);
+        s_timeUp = false;
+
+        // Background display timer updates the visible countdown once per second.
+        s_displayTimer = new System.Threading.Timer(_ =>
+        {
+            var remaining = s_endTime - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                s_timeUp = true;
+                remaining = TimeSpan.Zero;
+            }
+
+            UpdateTimerDisplay(remaining);
+        }, null, 0, 1000);
 
         // Build all vocabulary entries as standalone "sentences".
         // We'll store component indices so distractor generation can vary the same category.
@@ -172,9 +195,10 @@ class Program
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
 
-        while (learnedWhen.Count < WhenPhrases.Length ||
+        while (!s_timeUp && (
+               learnedWhen.Count < WhenPhrases.Length ||
                learnedConjugations.Count < Conjugations.Length ||
-               learnedVocab.Count < Vocab.Length)
+               learnedVocab.Count < Vocab.Length))
         {
             // Always clear and redraw the screen before each question
             RedrawScreen(learnedWhen.Count, WhenPhrases.Length,
@@ -209,6 +233,12 @@ class Program
             Console.Write("Pick your answer (1-4): ");
             Console.ResetColor();
             var input = Console.ReadLine();
+
+            // If time expired while waiting for input, break immediately.
+            if (s_timeUp)
+            {
+                break;
+            }
 
             if (!int.TryParse(input, out var selected) || selected < 1 || selected > choiceList.Count)
             {
@@ -267,9 +297,25 @@ class Program
             System.Threading.Thread.Sleep(650);
         }
 
+        // Stop the display timer
+        s_displayTimer?.Dispose();
+
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\nAll items have been tested (answered correctly) — well done!");
+        if (s_timeUp)
+        {
+            Console.WriteLine("\nTime is up — the test has ended.");
+        }
+        else
+        {
+            Console.WriteLine("\nAll items have been tested (answered correctly) — well done!");
+        }
         Console.ResetColor();
+
+        // Final progress snapshot
+        DrawComponentProgress(learnedWhen.Count, WhenPhrases.Length,
+                              learnedConjugations.Count, Conjugations.Length,
+                              learnedVocab.Count, Vocab.Length);
+
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
@@ -458,5 +504,44 @@ class Program
         Console.WriteLine("╚════════════════════════════════════════════════╝");
         Console.ResetColor();
         Console.WriteLine("Translate the French item shown into natural English.\n");
+    }
+
+    // Updates the small countdown display in the banner area without disturbing user input (best-effort).
+    static void UpdateTimerDisplay(TimeSpan remaining)
+    {
+        lock (s_consoleLock)
+        {
+            try
+            {
+                // Remember cursor
+                int curLeft = Console.CursorLeft;
+                int curTop = Console.CursorTop;
+
+                // Choose a row near the top for the timer (row 1 is inside the banner area).
+                int timerRow = 1;
+
+                // Compute a right-aligned position for the timer text
+                var timerText = $"Time left: {remaining:mm\\:ss}";
+                int col = Math.Max(0, Console.WindowWidth - timerText.Length - 1);
+
+                if (timerRow < Console.BufferHeight)
+                {
+                    Console.SetCursorPosition(col, timerRow);
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.Write(timerText);
+                    Console.ResetColor();
+                }
+
+                // Restore cursor (best-effort; may throw if console size changed)
+                if (curTop < Console.BufferHeight && curLeft < Console.BufferWidth)
+                {
+                    Console.SetCursorPosition(curLeft, curTop);
+                }
+            }
+            catch
+            {
+                // If console does not support cursor ops in this host, ignore silently.
+            }
+        }
     }
 }
