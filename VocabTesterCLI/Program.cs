@@ -9,11 +9,11 @@ using System.Threading.Tasks;
 
 class Program
 {
-    // Build vocab from conjugations of "jouer" + activity/object phrases
+    // Build vocab from the hobby noun phrases shown in the provided image.
+    // The app will test the French hobby phrase (e.g. "du footing") ↔ the English meaning ("jogging").
     static readonly (string French, string English)[] Vocab = BuildVocab();
 
     // simple category mapping so multiple-choice distractors come from the same category
-    // Category map created dynamically to group distractors (sports, music, games, social)
     static readonly Dictionary<string, string> CategoryByFrench = BuildCategoryMap(Vocab);
 
     enum QuizState { NeedEnglish, NeedFrench }
@@ -28,8 +28,8 @@ class Program
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         var rng = new Random();
 
-        // start a 30 minute countdown that is shown on-screen and will stop the app when it reaches zero
-        StartCountdown(TimeSpan.FromMinutes(30));
+        // start a 20 minute countdown that is shown on-screen and will stop the app when it reaches zero
+        StartCountdown(TimeSpan.FromMinutes(20));
 
         // Start by testing French -> English first (multiple choice).
         // After correct, require English -> French (typed) before eliminating.
@@ -190,7 +190,7 @@ class Program
                     }
                     else
                     {
-                        // Wrong: show correct answer immediately (red), then require user to type it correctly
+                        // Wrong: show correct answer immediately (red), then require user to type it, but do not mark learned
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine($"Aww, not quite! The correct answer is \"{key.French}\". 🍬");
                         Console.ResetColor();
@@ -251,7 +251,6 @@ class Program
             try
             {
                 var totalSeconds = Math.Max(1.0, duration.TotalSeconds);
-                const int barWidth = 20;
                 while (true)
                 {
                     var remaining = _countdownEndUtc - DateTime.UtcNow;
@@ -277,13 +276,12 @@ class Program
                         break;
                     }
 
-                    // Draw a shrinking progress bar representing remaining time
-                    var remainingSeconds = Math.Max(0.0, remaining.TotalSeconds);
-                    var ratio = remainingSeconds / totalSeconds;
-                    var filled = (int)Math.Round(ratio * barWidth);
-                    filled = Math.Min(Math.Max(filled, 0), barWidth);
-                    var bar = new string('█', filled) + new string('─', barWidth - filled);
-                    var text = $"Timer: [{bar}]";
+                    // Show minutes remaining (rounded up). If less than 1 minute, show "<1 min remaining".
+                    var minutesLeft = (int)Math.Ceiling(remaining.TotalMinutes);
+                    var minuteText = minutesLeft >= 1
+                        ? $"{minutesLeft} min{(minutesLeft == 1 ? "" : "s")} remaining"
+                        : "<1 min remaining";
+                    var text = $"Timer: {minuteText}";
 
                     lock (ConsoleLock)
                     {
@@ -291,7 +289,7 @@ class Program
                         {
                             int width = 0;
                             try { width = Console.WindowWidth; } catch { width = 80; }
-                            // position so the bar appears at the top-right
+                            // position so the timer appears at the top-right
                             int col = Math.Max(0, width - (text.Length + 2));
                             int row = 0;
                             int curLeft = 0;
@@ -323,7 +321,7 @@ class Program
                         catch { /* ignore all console errors to avoid crashing timer */ }
                     }
 
-                    // update every 15 seconds to avoid flicker (minutes-level precision not needed)
+                    // update every 15 seconds (minutes-level precision is sufficient)
                     Thread.Sleep(15000);
                 }
             }
@@ -436,51 +434,25 @@ class Program
 
     static (string French, string English)[] BuildVocab()
     {
-        var subjects = new (string FrenchSubject, string EnglishSubject, string Conjugation)[ ]
-        {
-            ("Je", "I", "joue"),
-            ("Tu", "You", "joues"),
-            ("Il", "He", "joue"),
-            ("Elle", "She", "joue"),
-            ("On", "One", "joue"),
-            ("Nous", "We", "jouons"),
-            ("Vous", "You all", "jouez"),
-            ("Ils", "They (m)", "jouent"),
-            ("Elles", "They (f)", "jouent"),
-        };
-
+        // Hobbies from the provided image. Only the hobby noun phrases are tested — verbs are omitted.
         var activities = new (string FrenchPhrase, string EnglishPhrase, string Category)[]
         {
-            ("au basket", "basketball", "sports"),
-            ("au foot", "football", "sports"),
-            ("au tennis", "tennis", "sports"),
-            ("aux cartes", "cards", "games"),
-            ("aux échecs", "chess", "games"),
-
-            ("avec des amis", "with some friends", "social"),
-
-            ("de la batterie", "the drums", "music"),
-            ("du clavier", "the keyboard", "music"),
-            ("de la guitare", "the guitar", "music"),
-            ("du piano", "the piano", "music"),
+            ("du footing", "jogging", "sports"),
+            ("du ski", "skiing", "sports"),
+            ("du sport", "sport", "sports"),
+            ("du vélo", "cycling", "sports"),
+            ("de l'équitation", "horse riding", "sports"),
+            ("de l'escalade", "climbing", "outdoor"),
+            ("de la musculation", "weight training", "fitness"),
+            ("de la natation", "swimming", "sports"),
+            ("de la randonnée", "hiking", "outdoor"),
+            ("les devoirs", "homework", "other"),
         };
 
-        // We want to focus on the nouns (activities). Pick one random subject/conjugation per activity
-        var rng = new Random();
         var list = new List<(string French, string English)>();
         foreach (var act in activities)
         {
-            var subj = subjects[rng.Next(subjects.Length)];
-            // build French: e.g. "Je joue au basket"
-            var french = $"{subj.FrenchSubject} {subj.Conjugation} {act.FrenchPhrase}".Trim();
-            // build English: e.g. "I play basketball" or "He plays the guitar"
-            var verb = subj.EnglishSubject switch
-            {
-                "He" or "She" or "One" => "plays",
-                _ => "play",
-            };
-            var english = $"{subj.EnglishSubject} {verb} {act.EnglishPhrase}".Trim();
-            list.Add((french, english));
+            list.Add((act.FrenchPhrase, act.EnglishPhrase));
         }
 
         return list.ToArray();
@@ -488,14 +460,23 @@ class Program
 
     static Dictionary<string, string> BuildCategoryMap((string French, string English)[] vocab)
     {
-        var map = new Dictionary<string, string>();
+        // Lightweight categorization based on keywords so distractors come from related activities.
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (french, english) in vocab)
         {
-            var cat = "other";
-            if (french.Contains("basket") || french.Contains("foot") || french.Contains("tennis")) cat = "sports";
-            else if (french.Contains("cartes") || french.Contains("échecs")) cat = "games";
-            else if (french.Contains("amis")) cat = "social";
-            else if (french.Contains("batterie") || french.Contains("guitare") || french.Contains("clavier") || french.Contains("piano")) cat = "music";
+            var lower = french.ToLowerInvariant();
+            string cat;
+            if (lower.Contains("foot") || lower.Contains("ski") || lower.Contains("vélo") || lower.Contains("natation") || lower.Contains("sport") || lower.Contains("équitation"))
+                cat = "sports";
+            else if (lower.Contains("escalade") || lower.Contains("randonnée"))
+                cat = "outdoor";
+            else if (lower.Contains("musculation"))
+                cat = "fitness";
+            else if (lower.Contains("devoir"))
+                cat = "other";
+            else
+                cat = "other";
+
             map[french] = cat;
         }
         return map;
