@@ -6,41 +6,126 @@ using System.Text;
 class Program
 {
     // Reuse existing small records but repurpose them as:
-    // - Subject -> Weather item
-    // - Food    -> Place item
-    // - Meal    -> Time / adverb item
+    // - Subject -> When/Weather phrases (Quand ...)
+    // - Food    -> Conjugation / pronoun forms
+    // - Meal    -> Activities / places / frequency expressions
     record Subject(string French, string English, int VerbGroup); // VerbGroup unused but kept for compatibility
     record Food(string French, string English, int[] Meals);      // Meals field unused for places but kept for compatibility
     record Meal(string French, string English);
 
-    // WEATHER items (previously 'Subjects')
-    static readonly Subject[] Weather =
+    // WHEN / weather phrases (previously 'Weather')
+    static readonly Subject[] WhenPhrases =
     {
-        new Subject("il fait beau",     "it is good weather", 0),
-        new Subject("il fait chaud",    "it is hot", 0),
-        new Subject("il y a du soleil", "it is sunny", 0),
-        new Subject("il fait froid",    "it is cold", 0),
-        new Subject("il fait mauvais",  "it is bad weather", 0),
-        new Subject("il pleut",         "it rains", 0),
-        new Subject("il neige",         "it snows", 0),
+        new Subject("Quand le ciel est dégagé", "When the sky is clear", 0),
+        new Subject("Quand il y a des nuages", "When it is cloudy", 0),
+        new Subject("Quand il fait beau", "When it is good weather", 0),
+        new Subject("Quand il fait chaud", "When it is hot", 0),
+        new Subject("Quand il fait froid", "When it is cold", 0),
+        new Subject("Quand il fait mauvais", "When it is bad weather", 0),
+        new Subject("Quand il y a du soleil", "When it is sunny", 0),
+        new Subject("Quand il y a du vent", "When it is windy", 0),
+        new Subject("Quand il y a du brouillard", "When it is foggy", 0),
+        new Subject("Quand il y a de l'orage", "When it is stormy", 0),
+        new Subject("Quand il pleut", "When it rains", 0),
+        new Subject("Quand il neige", "When it snows", 0),
+        new Subject("Pendant la semaine", "During the week", 0),
+        new Subject("Le week-end", "At the weekend", 0),
     };
 
-    // PLACES items (previously 'Foods')
-    static readonly Food[] Places =
+    // CONJUGATIONS / pronouns (previously 'Places')
+    static readonly Food[] Conjugations =
     {
-        new Food("À la maison",  "At home",     new[] { 0 }),
-        new Food("Au collège",   "At school",   new[] { 0 }),
-        new Food("Au gymnase",   "At the gym",  new[] { 0 }),
-        new Food("À la plage",   "On the beach",new[] { 0 }),
+        // jouer
+        new Food("Je joue", "I play", new[] { 0 }),
+        new Food("Tu joues", "You play", new[] { 0 }),
+        new Food("Il joue", "He plays", new[] { 0 }),
+        new Food("Elle joue", "She plays", new[] { 0 }),
+        new Food("On joue", "One plays", new[] { 0 }),
+        new Food("Nous jouons", "We play", new[] { 0 }),
+        new Food("Vous jouez", "You all play", new[] { 0 }),
+        new Food("Ils jouent", "They (m) play", new[] { 0 }),
+        new Food("Elles jouent", "They (f) play", new[] { 0 }),
+
+        // faire
+        new Food("Je fais", "I do", new[] { 0 }),
+        new Food("Tu fais", "You do", new[] { 0 }),
+        new Food("Il fait", "He does", new[] { 0 }),
+        new Food("Elle fait", "She does", new[] { 0 }),
+        new Food("On fait", "One does", new[] { 0 }),
+        new Food("Nous faisons", "We do", new[] { 0 }),
+        new Food("Vous faites", "You all do", new[] { 0 }),
+        new Food("Ils font", "They (m) do", new[] { 0 }),
+        new Food("Elles font", "They (f) do", new[] { 0 }),
+
+        // aller
+        new Food("Je vais", "I go", new[] { 0 }),
+        new Food("Tu vas", "You go", new[] { 0 }),
+        new Food("Il va", "He goes", new[] { 0 }),
+        new Food("Elle va", "She goes", new[] { 0 }),
+        new Food("On va", "One goes", new[] { 0 }),
+        new Food("Nous allons", "We go", new[] { 0 }),
+        new Food("Vous allez", "You all go", new[] { 0 }),
+        new Food("Ils vont", "They (m) go", new[] { 0 }),
+        new Food("Elles vont", "They (f) go", new[] { 0 }),
+
+        // rester (short set)
+        new Food("Je reste", "I stay", new[] { 0 }),
+        new Food("Tu restes", "You stay", new[] { 0 }),
+        new Food("Mon ami reste", "My friend (m) stays", new[] { 0 }),
+        new Food("Mon amie reste", "My friend (f) stays", new[] { 0 }),
     };
 
-    // TIMES / frequency adverbs (previously 'Meals')
-    static readonly Meal[] Times =
+    // ACTIVITIES / places / instruments / frequency expressions (previously 'Times')
+    static readonly Meal[] Vocab =
     {
-        new Meal("D'habitude",  "Usually"),
-        new Meal("En général",  "In general"),
-        new Meal("Normalement", "Normally"),
-        new Meal("Parfois",     "Sometimes"),
+        // sports / pastimes
+        new Meal("au basket", "to/at basketball"),
+        new Meal("au foot", "to/at football"),
+        new Meal("au tennis", "to/at tennis"),
+        new Meal("aux cartes", "cards"),
+        new Meal("aux échecs", "chess"),
+        new Meal("avec des amis", "with some friends"),
+
+        // activities (faire)
+        new Meal("du footing", "jogging"),
+        new Meal("du ski", "skiing"),
+        new Meal("du sport", "sport"),
+        new Meal("du vélo", "cycling"),
+        new Meal("de l'équitation", "horse riding"),
+        new Meal("de l'escalade", "climbing"),
+        new Meal("de la musculation", "weight training"),
+        new Meal("de la natation", "swimming"),
+        new Meal("de la randonnée", "hiking"),
+        new Meal("les devoirs", "homework"),
+
+        // instruments
+        new Meal("de la batterie", "the drums"),
+        new Meal("du clavier", "the keyboard"),
+        new Meal("de la guitare", "the guitar"),
+        new Meal("du piano", "the piano"),
+
+        // places
+        new Meal("au centre commercial", "to the shopping centre"),
+        new Meal("au centre sportif", "to the sports centre"),
+        new Meal("au gymnase", "to the gym"),
+        new Meal("au parc", "to the park"),
+        new Meal("à la montagne", "to the mountains"),
+        new Meal("à la pêche", "fishing"),
+        new Meal("à la piscine", "to the swimming pool"),
+        new Meal("à la plage", "to the beach"),
+        new Meal("chez des amis", "to friends' houses"),
+
+        // frequency/time expressions
+        new Meal("de temps en temps", "from time to time"),
+        new Meal("une fois par semaine", "once a week"),
+        new Meal("deux fois par semaine", "twice a week"),
+        new Meal("une fois par mois", "once a month"),
+        new Meal("deux fois par mois", "twice a month"),
+        new Meal("une fois par an", "once a year"),
+        new Meal("tous les jours", "every day"),
+        new Meal("tous les samedis", "every Saturday"),
+        new Meal("tous les soirs", "every evening"),
+        new Meal("tous les week-ends", "every weekend"),
     };
 
     static void Main()
@@ -50,56 +135,56 @@ class Program
 
         // Build all vocabulary entries as standalone "sentences".
         // We'll store component indices so distractor generation can vary the same category.
-        // tuple: french, english, weatherIdx, placeIdx, timeIdx
-        var sentences = new List<(string French, string English, int weatherIdx, int placeIdx, int timeIdx)>();
+        // tuple: french, english, whenIdx, conjugationIdx, vocabIdx
+        var sentences = new List<(string French, string English, int whenIdx, int conjugationIdx, int vocabIdx)>();
 
-        // Weather entries
-        for (int wi = 0; wi < Weather.Length; wi++)
+        // When / weather entries
+        for (int wi = 0; wi < WhenPhrases.Length; wi++)
         {
-            var w = Weather[wi];
+            var w = WhenPhrases[wi];
             sentences.Add(($"{w.French}.", $"{w.English}.", wi, -1, -1));
         }
 
-        // Place entries
-        for (int pi = 0; pi < Places.Length; pi++)
+        // Conjugation entries
+        for (int pi = 0; pi < Conjugations.Length; pi++)
         {
-            var p = Places[pi];
+            var p = Conjugations[pi];
             sentences.Add(($"{p.French}.", $"{p.English}.", -1, pi, -1));
         }
 
-        // Time / adverb entries
-        for (int ti = 0; ti < Times.Length; ti++)
+        // Vocab / activities / places / frequency entries
+        for (int ti = 0; ti < Vocab.Length; ti++)
         {
-            var t = Times[ti];
+            var t = Vocab[ti];
             sentences.Add(($"{t.French}.", $"{t.English}.", -1, -1, ti));
         }
 
-        var learnedWeather = new HashSet<int>();
-        var learnedPlaces = new HashSet<int>();
-        var learnedTimes = new HashSet<int>();
+        var learnedWhen = new HashSet<int>();
+        var learnedConjugations = new HashSet<int>();
+        var learnedVocab = new HashSet<int>();
 
         Console.WriteLine();
 
         // Initial draw before the first question
-        RedrawScreen(learnedWeather.Count, Weather.Length,
-                     learnedPlaces.Count, Places.Length,
-                     learnedTimes.Count, Times.Length);
+        RedrawScreen(learnedWhen.Count, WhenPhrases.Length,
+                     learnedConjugations.Count, Conjugations.Length,
+                     learnedVocab.Count, Vocab.Length);
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
 
-        while (learnedWeather.Count < Weather.Length ||
-               learnedPlaces.Count < Places.Length ||
-               learnedTimes.Count < Times.Length)
+        while (learnedWhen.Count < WhenPhrases.Length ||
+               learnedConjugations.Count < Conjugations.Length ||
+               learnedVocab.Count < Vocab.Length)
         {
             // Always clear and redraw the screen before each question
-            RedrawScreen(learnedWeather.Count, Weather.Length,
-                         learnedPlaces.Count, Places.Length,
-                         learnedTimes.Count, Times.Length);
+            RedrawScreen(learnedWhen.Count, WhenPhrases.Length,
+                         learnedConjugations.Count, Conjugations.Length,
+                         learnedVocab.Count, Vocab.Length);
 
             var candidate = pool.FirstOrDefault(s =>
-                (s.weatherIdx >= 0 && !learnedWeather.Contains(s.weatherIdx)) ||
-                (s.placeIdx   >= 0 && !learnedPlaces.Contains(s.placeIdx)) ||
-                (s.timeIdx    >= 0 && !learnedTimes.Contains(s.timeIdx)));
+                (s.whenIdx >= 0 && !learnedWhen.Contains(s.whenIdx)) ||
+                (s.conjugationIdx   >= 0 && !learnedConjugations.Contains(s.conjugationIdx)) ||
+                (s.vocabIdx    >= 0 && !learnedVocab.Contains(s.vocabIdx)));
 
             if (candidate.Equals(default))
             {
@@ -142,9 +227,9 @@ class Program
                 Console.ResetColor();
 
                 // Mark learned item in the right category
-                if (candidate.weatherIdx >= 0) learnedWeather.Add(candidate.weatherIdx);
-                if (candidate.placeIdx   >= 0) learnedPlaces.Add(candidate.placeIdx);
-                if (candidate.timeIdx    >= 0) learnedTimes.Add(candidate.timeIdx);
+                if (candidate.whenIdx >= 0) learnedWhen.Add(candidate.whenIdx);
+                if (candidate.conjugationIdx   >= 0) learnedConjugations.Add(candidate.conjugationIdx);
+                if (candidate.vocabIdx    >= 0) learnedVocab.Add(candidate.vocabIdx);
 
                 pool.Remove(candidate);
             }
@@ -169,28 +254,28 @@ class Program
                 Console.ReadLine();
 
                 // Clear and redraw the screen now
-                RedrawScreen(learnedWeather.Count, Weather.Length,
-                             learnedPlaces.Count, Places.Length,
-                             learnedTimes.Count, Times.Length);
+                RedrawScreen(learnedWhen.Count, WhenPhrases.Length,
+                             learnedConjugations.Count, Conjugations.Length,
+                             learnedVocab.Count, Vocab.Length);
             }
 
-            DrawComponentProgress(learnedWeather.Count, Weather.Length,
-                                  learnedPlaces.Count, Places.Length,
-                                  learnedTimes.Count, Times.Length);
+            DrawComponentProgress(learnedWhen.Count, WhenPhrases.Length,
+                                  learnedConjugations.Count, Conjugations.Length,
+                                  learnedVocab.Count, Vocab.Length);
 
             // small pause so user sees result before next redraw (optional)
             System.Threading.Thread.Sleep(650);
         }
 
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\nAll weather, places and times items have been tested (answered correctly) — well done!");
+        Console.WriteLine("\nAll items have been tested (answered correctly) — well done!");
         Console.ResetColor();
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
 
     // Draws the screen header + the three progress bars
-    static void RedrawScreen(int learnedWeather, int totalWeather, int learnedPlaces, int totalPlaces, int learnedTimes, int totalTimes)
+    static void RedrawScreen(int learnedWhen, int totalWhen, int learnedConjugations, int totalConjugations, int learnedVocab, int totalVocab)
     {
         try
         {
@@ -202,44 +287,44 @@ class Program
         }
 
         PrintBanner();
-        DrawComponentProgress(learnedWeather, totalWeather, learnedPlaces, totalPlaces, learnedTimes, totalTimes);
+        DrawComponentProgress(learnedWhen, totalWhen, learnedConjugations, totalConjugations, learnedVocab, totalVocab);
     }
 
     // Builds 4 choices that are deliberately similar.
-    // If the candidate is a single-category item (weather/place/time) produce distractors from the same category.
-    static List<string> BuildSimilarChoices((string French, string English, int weatherIdx, int placeIdx, int timeIdx) item, Random rng)
+    // If the candidate is a single-category item produce distractors from the same category.
+    static List<string> BuildSimilarChoices((string French, string English, int whenIdx, int conjugationIdx, int vocabIdx) item, Random rng)
     {
         var correct = item.English;
         var choices = new HashSet<string> { correct };
 
-        // If this is a weather item
-        if (item.weatherIdx >= 0 && item.placeIdx < 0 && item.timeIdx < 0)
+        // If this is a when item
+        if (item.whenIdx >= 0 && item.conjugationIdx < 0 && item.vocabIdx < 0)
         {
-            var pool = Enumerable.Range(0, Weather.Length).Where(i => i != item.weatherIdx).OrderBy(_ => rng.Next()).ToList();
+            var pool = Enumerable.Range(0, WhenPhrases.Length).Where(i => i != item.whenIdx).OrderBy(_ => rng.Next()).ToList();
             foreach (var i in pool)
             {
                 if (choices.Count >= 4) break;
-                choices.Add($"{Weather[i].English}.");
+                choices.Add($"{WhenPhrases[i].English}.");
             }
         }
-        // If this is a place item
-        else if (item.placeIdx >= 0 && item.weatherIdx < 0 && item.timeIdx < 0)
+        // If this is a conjugation item
+        else if (item.conjugationIdx >= 0 && item.whenIdx < 0 && item.vocabIdx < 0)
         {
-            var pool = Enumerable.Range(0, Places.Length).Where(i => i != item.placeIdx).OrderBy(_ => rng.Next()).ToList();
+            var pool = Enumerable.Range(0, Conjugations.Length).Where(i => i != item.conjugationIdx).OrderBy(_ => rng.Next()).ToList();
             foreach (var i in pool)
             {
                 if (choices.Count >= 4) break;
-                choices.Add($"{Places[i].English}.");
+                choices.Add($"{Conjugations[i].English}.");
             }
         }
-        // If this is a time/adverb item
-        else if (item.timeIdx >= 0 && item.weatherIdx < 0 && item.placeIdx < 0)
+        // If this is a vocab item
+        else if (item.vocabIdx >= 0 && item.whenIdx < 0 && item.conjugationIdx < 0)
         {
-            var pool = Enumerable.Range(0, Times.Length).Where(i => i != item.timeIdx).OrderBy(_ => rng.Next()).ToList();
+            var pool = Enumerable.Range(0, Vocab.Length).Where(i => i != item.vocabIdx).OrderBy(_ => rng.Next()).ToList();
             foreach (var i in pool)
             {
                 if (choices.Count >= 4) break;
-                choices.Add($"{Times[i].English}.");
+                choices.Add($"{Vocab[i].English}.");
             }
         }
         else
@@ -250,31 +335,31 @@ class Program
             {
                 if (choices.Count >= 4) break;
 
-                if (attempt == 0 && item.weatherIdx >= 0)
+                if (attempt == 0 && item.whenIdx >= 0)
                 {
-                    var pool = Enumerable.Range(0, Weather.Length).Where(i => i != item.weatherIdx).OrderBy(_ => rng.Next()).ToList();
+                    var pool = Enumerable.Range(0, WhenPhrases.Length).Where(i => i != item.whenIdx).OrderBy(_ => rng.Next()).ToList();
                     foreach (var i in pool)
                     {
                         if (choices.Count >= 4) break;
-                        choices.Add(FormatEnglish(i, item.placeIdx, item.timeIdx));
+                        choices.Add(FormatEnglish(i, item.conjugationIdx, item.vocabIdx));
                     }
                 }
-                else if (attempt == 1 && item.placeIdx >= 0)
+                else if (attempt == 1 && item.conjugationIdx >= 0)
                 {
-                    var pool = Enumerable.Range(0, Places.Length).Where(i => i != item.placeIdx).OrderBy(_ => rng.Next()).ToList();
+                    var pool = Enumerable.Range(0, Conjugations.Length).Where(i => i != item.conjugationIdx).OrderBy(_ => rng.Next()).ToList();
                     foreach (var i in pool)
                     {
                         if (choices.Count >= 4) break;
-                        choices.Add(FormatEnglish(item.weatherIdx, i, item.timeIdx));
+                        choices.Add(FormatEnglish(item.whenIdx, i, item.vocabIdx));
                     }
                 }
-                else if (attempt == 2 && item.timeIdx >= 0)
+                else if (attempt == 2 && item.vocabIdx >= 0)
                 {
-                    var pool = Enumerable.Range(0, Times.Length).Where(i => i != item.timeIdx).OrderBy(_ => rng.Next()).ToList();
+                    var pool = Enumerable.Range(0, Vocab.Length).Where(i => i != item.vocabIdx).OrderBy(_ => rng.Next()).ToList();
                     foreach (var i in pool)
                     {
                         if (choices.Count >= 4) break;
-                        choices.Add(FormatEnglish(item.weatherIdx, item.placeIdx, i));
+                        choices.Add(FormatEnglish(item.whenIdx, item.conjugationIdx, i));
                     }
                 }
             }
@@ -284,20 +369,20 @@ class Program
         var fillAttempts = 0;
         while (choices.Count < 4 && fillAttempts++ < 200)
         {
-            if (item.weatherIdx >= 0)
+            if (item.whenIdx >= 0)
             {
-                var i = rng.Next(Weather.Length);
-                choices.Add($"{Weather[i].English}.");
+                var i = rng.Next(WhenPhrases.Length);
+                choices.Add($"{WhenPhrases[i].English}.");
             }
-            else if (item.placeIdx >= 0)
+            else if (item.conjugationIdx >= 0)
             {
-                var i = rng.Next(Places.Length);
-                choices.Add($"{Places[i].English}.");
+                var i = rng.Next(Conjugations.Length);
+                choices.Add($"{Conjugations[i].English}.");
             }
-            else if (item.timeIdx >= 0)
+            else if (item.vocabIdx >= 0)
             {
-                var i = rng.Next(Times.Length);
-                choices.Add($"{Times[i].English}.");
+                var i = rng.Next(Vocab.Length);
+                choices.Add($"{Vocab[i].English}.");
             }
             else
             {
@@ -309,24 +394,24 @@ class Program
         return choices.OrderBy(_ => rng.Next()).ToList();
     }
 
-    static string FormatEnglish(int weatherIdx, int placeIdx, int timeIdx)
+    static string FormatEnglish(int whenIdx, int conjugationIdx, int vocabIdx)
     {
         var parts = new List<string>();
-        if (weatherIdx >= 0) parts.Add(Weather[weatherIdx].English);
-        if (placeIdx   >= 0) parts.Add(Places[placeIdx].English);
-        if (timeIdx    >= 0) parts.Add(Times[timeIdx].English);
+        if (whenIdx >= 0) parts.Add(WhenPhrases[whenIdx].English);
+        if (conjugationIdx   >= 0) parts.Add(Conjugations[conjugationIdx].English);
+        if (vocabIdx    >= 0) parts.Add(Vocab[vocabIdx].English);
         var sentence = string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
         if (!sentence.EndsWith(".")) sentence += ".";
         return sentence;
     }
 
-    static void DrawComponentProgress(int learnedWeather, int totalWeather, int learnedPlaces, int totalPlaces, int learnedTimes, int totalTimes)
+    static void DrawComponentProgress(int learnedWhen, int totalWhen, int learnedConjugations, int totalConjugations, int learnedVocab, int totalVocab)
     {
-        // Render three ASCII progress bars (Weather, Places, Times)
+        // Render three ASCII progress bars (When / Conjugations / Vocabulary)
         Console.WriteLine();
-        DrawProgressBar("Weather:", learnedWeather, totalWeather, 24);
-        DrawProgressBar("Places:",  learnedPlaces, totalPlaces, 24);
-        DrawProgressBar("Times:",   learnedTimes,  totalTimes,  24);
+        DrawProgressBar("When:", learnedWhen, totalWhen, 24);
+        DrawProgressBar("Conjugations:",  learnedConjugations, totalConjugations, 24);
+        DrawProgressBar("Vocabulary:",   learnedVocab,  totalVocab,  24);
         Console.WriteLine();
     }
 
