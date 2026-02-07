@@ -9,8 +9,8 @@ using System.Threading.Tasks;
 
 class Program
 {
-    // Build vocab from the hobby noun phrases shown in the provided image.
-    // The app will test the French hobby phrase (e.g. "du footing") ↔ the English meaning ("jogging").
+    // Build vocab from the "Quand ..." weather/time phrases shown in the provided image.
+    // The app will test the French phrase (e.g. "Quand il pleut") ↔ the English meaning ("When it rains").
     static readonly (string French, string English)[] Vocab = BuildVocab();
 
     // simple category mapping so multiple-choice distractors come from the same category
@@ -152,9 +152,7 @@ class Program
                         // mark English-side as done: move to NeedFrench (this counts as one step done)
                         remaining[key] = QuizState.NeedFrench;
 
-                        correct = false; // don't remove yet — removal only after French typed
-                        // we set correct=false because removal (and full completion) happens when the user types French later.
-                        // progress bar already updated above using the 'NeedFrench' state mapping.
+                        correct = false; // removal happens after typing French
                     }
                     else
                     {
@@ -174,7 +172,7 @@ class Program
                     // Track whether user corrected a shown answer; corrections should not mark the item as learned.
                     bool correctedButNotLearned = false;
 
-                    // First attempt (if correct immediately => learned); otherwise show correct, require typing it, but do not mark learned.
+                    // First attempt (if correct immediately => learned); otherwise show correct, require typing it, but do not mark learned
                     Console.ForegroundColor = ConsoleColor.Magenta;
                     Console.Write("Your answer: ");
                     Console.ResetColor();
@@ -434,50 +432,35 @@ class Program
 
     static (string French, string English)[] BuildVocab()
     {
-        // Hobbies from the provided image. Only the hobby noun phrases are tested — verbs are omitted.
-        var activities = new (string FrenchPhrase, string EnglishPhrase, string Category)[]
+        // Weather/time phrases from the provided image.
+        var items = new[]
         {
-            ("du footing", "jogging", "sports"),
-            ("du ski", "skiing", "sports"),
-            ("du sport", "sport", "sports"),
-            ("du vélo", "cycling", "sports"),
-            ("de l'équitation", "horse riding", "sports"),
-            ("de l'escalade", "climbing", "outdoor"),
-            ("de la musculation", "weight training", "fitness"),
-            ("de la natation", "swimming", "sports"),
-            ("de la randonnée", "hiking", "outdoor"),
-            ("les devoirs", "homework", "other"),
+            ("Quand le ciel est dégagé", "When the sky is clear"),
+            ("Quand il y a des nuages", "When it is cloudy"),
+            ("Quand il fait beau", "When it is good weather"),
+            ("Quand il fait chaud", "When it is hot"),
+            ("Quand il fait froid", "When it is cold"),
+            ("Quand il fait mauvais", "When it is bad weather"),
+            ("Quand il y a du soleil", "When it is sunny"),
+            ("Quand il y a du vent", "When it is windy"),
+            ("Quand il y a du brouillard", "When it is foggy"),
+            ("Quand il y a de l'orage", "When it is stormy"),
+            ("Quand il pleut", "When it rains"),
+            ("Quand il neige", "When it snows"),
+            ("Pendant la semaine", "During the week"),
+            ("Le week-end", "At the weekend"),
         };
 
-        var list = new List<(string French, string English)>();
-        foreach (var act in activities)
-        {
-            list.Add((act.FrenchPhrase, act.EnglishPhrase));
-        }
-
-        return list.ToArray();
+        return items.Select(t => (French: t.Item1, English: t.Item2)).ToArray();
     }
 
     static Dictionary<string, string> BuildCategoryMap((string French, string English)[] vocab)
     {
-        // Lightweight categorization based on keywords so distractors come from related activities.
+        // All entries are the same category so distractors come from related set.
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (french, english) in vocab)
         {
-            var lower = french.ToLowerInvariant();
-            string cat;
-            if (lower.Contains("foot") || lower.Contains("ski") || lower.Contains("vélo") || lower.Contains("natation") || lower.Contains("sport") || lower.Contains("équitation"))
-                cat = "sports";
-            else if (lower.Contains("escalade") || lower.Contains("randonnée"))
-                cat = "outdoor";
-            else if (lower.Contains("musculation"))
-                cat = "fitness";
-            else if (lower.Contains("devoir"))
-                cat = "other";
-            else
-                cat = "other";
-
-            map[french] = cat;
+            map[french] = "when";
         }
         return map;
     }
