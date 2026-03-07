@@ -432,23 +432,20 @@ class Program
 
     static (string French, string English)[] BuildVocab()
     {
-        // Weather/time phrases from the provided image.
+        // Daily routine phrases from the provided image.
         var items = new[]
         {
-            ("Quand le ciel est dégagé", "When the sky is clear"),
-            ("Quand il y a des nuages", "When it is cloudy"),
-            ("Quand il fait beau", "When it is good weather"),
-            ("Quand il fait chaud", "When it is hot"),
-            ("Quand il fait froid", "When it is cold"),
-            ("Quand il fait mauvais", "When it is bad weather"),
-            ("Quand il y a du soleil", "When it is sunny"),
-            ("Quand il y a du vent", "When it is windy"),
-            ("Quand il y a du brouillard", "When it is foggy"),
-            ("Quand il y a de l'orage", "When it is stormy"),
-            ("Quand il pleut", "When it rains"),
-            ("Quand il neige", "When it snows"),
-            ("Pendant la semaine", "During the week"),
-            ("Le week-end", "At the weekend"),
+            ("je me lève", "I get up"),
+            ("je prends le petit déjeuner", "I have breakfast"),
+            ("je prépare mon sac", "I get my bag ready"),
+            ("je promène le chien", "I walk the dog"),
+            ("je regarde la télé", "I watch TV"),
+            ("je rentre à la maison", "I go back home"),
+            ("je me repose", "I rest"),
+            ("je sors de chez moi", "I leave my house"),
+            ("je surfe sur internet", "I surf the internet"),
+            ("je vais au collège", "I go to school"),
+            ("je vais au collège en bus", "I go to school by bus"),
         };
 
         return items.Select(t => (French: t.Item1, English: t.Item2)).ToArray();
@@ -456,11 +453,11 @@ class Program
 
     static Dictionary<string, string> BuildCategoryMap((string French, string English)[] vocab)
     {
-        // All entries are the same category so distractors come from related set.
+        // Mark all entries as the same category so distractors come from the related daily-routine set.
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (french, english) in vocab)
         {
-            map[french] = "when";
+            map[french] = "daily_routine";
         }
         return map;
     }
