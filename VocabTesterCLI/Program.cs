@@ -6,126 +6,55 @@ using System.Text;
 class Program
 {
     // Reuse existing small records but repurpose them as:
-    // - Subject -> When/Weather phrases (Quand ...)
-    // - Food    -> Conjugation / pronoun forms
-    // - Meal    -> Activities / places / frequency expressions
+    // - Subject -> Sentence starters (e.g., "J'aime", "Ma pièce préférée est")
+    // - Food    -> Verb phrases (e.g., "me détendre")
+    // - Meal    -> Places / prepositional phrases
     record Subject(string French, string English, int VerbGroup); // VerbGroup unused but kept for compatibility
     record Food(string French, string English, int[] Meals);      // Meals field unused for places but kept for compatibility
     record Meal(string French, string English);
 
-    // WHEN / weather phrases (previously 'Weather')
+    // Sentence starters / prompts
     static readonly Subject[] WhenPhrases =
     {
-        new Subject("Quand le ciel est dégagé", "When the sky is clear", 0),
-        new Subject("Quand il y a des nuages", "When it is cloudy", 0),
-        new Subject("Quand il fait beau", "When it is good weather", 0),
-        new Subject("Quand il fait chaud", "When it is hot", 0),
-        new Subject("Quand il fait froid", "When it is cold", 0),
-        new Subject("Quand il fait mauvais", "When it is bad weather", 0),
-        new Subject("Quand il y a du soleil", "When it is sunny", 0),
-        new Subject("Quand il y a du vent", "When it is windy", 0),
-        new Subject("Quand il y a du brouillard", "When it is foggy", 0),
-        new Subject("Quand il y a de l'orage", "When it is stormy", 0),
-        new Subject("Quand il pleut", "When it rains", 0),
-        new Subject("Quand il neige", "When it snows", 0),
-        new Subject("Pendant la semaine", "During the week", 0),
-        new Subject("Le week-end", "At the weekend", 0),
+        new Subject("Ma pièce préférée est", "My favourite room is", 0),
+        new Subject("Mon endroit préféré est", "My favourite place is", 0),
+        new Subject("J'aime", "I like", 0),
+        new Subject("Je n'aime pas", "I don't like", 0),
     };
 
-    // CONJUGATIONS / pronouns (previously 'Places')
+    // Verb phrases that pair with starters (infinitives/inflected where needed)
     static readonly Food[] Conjugations =
     {
-        // jouer
-        new Food("Je joue", "I play", new[] { 0 }),
-        new Food("Tu joues", "You play", new[] { 0 }),
-        new Food("Il joue", "He plays", new[] { 0 }),
-        new Food("Elle joue", "She plays", new[] { 0 }),
-        new Food("On joue", "One plays", new[] { 0 }),
-        new Food("Nous jouons", "We play", new[] { 0 }),
-        new Food("Vous jouez", "You all play", new[] { 0 }),
-        new Food("Ils jouent", "They (m) play", new[] { 0 }),
-        new Food("Elles jouent", "They (f) play", new[] { 0 }),
-
-        // faire
-        new Food("Je fais", "I do", new[] { 0 }),
-        new Food("Tu fais", "You do", new[] { 0 }),
-        new Food("Il fait", "He does", new[] { 0 }),
-        new Food("Elle fait", "She does", new[] { 0 }),
-        new Food("On fait", "One does", new[] { 0 }),
-        new Food("Nous faisons", "We do", new[] { 0 }),
-        new Food("Vous faites", "You all do", new[] { 0 }),
-        new Food("Ils font", "They (m) do", new[] { 0 }),
-        new Food("Elles font", "They (f) do", new[] { 0 }),
-
-        // aller
-        new Food("Je vais", "I go", new[] { 0 }),
-        new Food("Tu vas", "You go", new[] { 0 }),
-        new Food("Il va", "He goes", new[] { 0 }),
-        new Food("Elle va", "She goes", new[] { 0 }),
-        new Food("On va", "One goes", new[] { 0 }),
-        new Food("Nous allons", "We go", new[] { 0 }),
-        new Food("Vous allez", "You all go", new[] { 0 }),
-        new Food("Ils vont", "They (m) go", new[] { 0 }),
-        new Food("Elles vont", "They (f) go", new[] { 0 }),
-
-        // rester (short set)
-        new Food("Je reste", "I stay", new[] { 0 }),
-        new Food("Tu restes", "You stay", new[] { 0 }),
-        new Food("Mon ami reste", "My friend (m) stays", new[] { 0 }),
-        new Food("Mon amie reste", "My friend (f) stays", new[] { 0 }),
+        new Food("me détendre", "to relax", new[] { 0 }),
+        new Food("me reposer", "to rest", new[] { 0 }),
+        new Food("travailler", "to work", new[] { 0 }),
+        new Food("lire", "to read", new[] { 0 }),
+        new Food("passer du temps", "to spend time", new[] { 0 }),
     };
 
-    // ACTIVITIES / places / instruments / frequency expressions (previously 'Times')
+    // Places / prepositional phrases and plain nouns for "is" sentences
     static readonly Meal[] Vocab =
     {
-        // sports / pastimes
-        new Meal("au basket", "to/at basketball"),
-        new Meal("au foot", "to/at football"),
-        new Meal("au tennis", "to/at tennis"),
-        new Meal("aux cartes", "cards"),
-        new Meal("aux échecs", "chess"),
-        new Meal("avec des amis", "with some friends"),
+        new Meal("ma chambre", "my bedroom"),
+        new Meal("dans ma chambre", "in my bedroom"),
 
-        // activities (faire)
-        new Meal("du footing", "jogging"),
-        new Meal("du ski", "skiing"),
-        new Meal("du sport", "sport"),
-        new Meal("du vélo", "cycling"),
-        new Meal("de l'équitation", "horse riding"),
-        new Meal("de l'escalade", "climbing"),
-        new Meal("de la musculation", "weight training"),
-        new Meal("de la natation", "swimming"),
-        new Meal("de la randonnée", "hiking"),
-        new Meal("les devoirs", "homework"),
+        new Meal("la cuisine", "the kitchen"),
+        new Meal("dans la cuisine", "in the kitchen"),
 
-        // instruments
-        new Meal("de la batterie", "the drums"),
-        new Meal("du clavier", "the keyboard"),
-        new Meal("de la guitare", "the guitar"),
-        new Meal("du piano", "the piano"),
+        new Meal("le jardin", "the garden"),
+        new Meal("dans le jardin", "in the garden"),
 
-        // places
-        new Meal("au centre commercial", "to the shopping centre"),
-        new Meal("au centre sportif", "to the sports centre"),
-        new Meal("au gymnase", "to the gym"),
-        new Meal("au parc", "to the park"),
-        new Meal("à la montagne", "to the mountains"),
-        new Meal("à la pêche", "fishing"),
-        new Meal("à la piscine", "to the swimming pool"),
-        new Meal("à la plage", "to the beach"),
-        new Meal("chez des amis", "to friends' houses"),
+        new Meal("la salle de bains", "the bathroom"),
+        new Meal("dans la salle de bains", "in the bathroom"),
 
-        // frequency/time expressions
-        new Meal("de temps en temps", "from time to time"),
-        new Meal("une fois par semaine", "once a week"),
-        new Meal("deux fois par semaine", "twice a week"),
-        new Meal("une fois par mois", "once a month"),
-        new Meal("deux fois par mois", "twice a month"),
-        new Meal("une fois par an", "once a year"),
-        new Meal("tous les jours", "every day"),
-        new Meal("tous les samedis", "every Saturday"),
-        new Meal("tous les soirs", "every evening"),
-        new Meal("tous les week-ends", "every weekend"),
+        new Meal("la salle à manger", "the dining room"),
+        new Meal("dans la salle à manger", "in the dining room"),
+
+        new Meal("le salon", "the living room"),
+        new Meal("dans le salon", "in the living room"),
+
+        new Meal("la terrasse", "the terrace"),
+        new Meal("sur la terrasse", "on the terrace"),
     };
 
     // Timer state
@@ -161,7 +90,7 @@ class Program
         // tuple: french, english, whenIdx, conjugationIdx, vocabIdx
         var sentences = new List<(string French, string English, int whenIdx, int conjugationIdx, int vocabIdx)>();
 
-        // When / weather entries
+        // When / sentence-starter entries
         for (int wi = 0; wi < WhenPhrases.Length; wi++)
         {
             var w = WhenPhrases[wi];
@@ -175,7 +104,7 @@ class Program
             sentences.Add(($"{p.French}.", $"{p.English}.", -1, pi, -1));
         }
 
-        // Vocab / activities / places / frequency entries
+        // Vocab / places entries
         for (int ti = 0; ti < Vocab.Length; ti++)
         {
             var t = Vocab[ti];
