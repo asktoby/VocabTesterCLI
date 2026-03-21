@@ -124,6 +124,9 @@ class Program
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
 
+        // Debug flag: allow '#' to skip phase 1 and jump to phase 2 (for testing)
+        bool debugSkipToStage2 = false;
+
         while (!s_timeUp && (
                learnedWhen.Count < WhenPhrases.Length ||
                learnedConjugations.Count < Conjugations.Length ||
@@ -161,7 +164,14 @@ class Program
             Console.ForegroundColor = ConsoleColor.Magenta;
             Console.Write("Pick your answer (1-4): ");
             Console.ResetColor();
-            var input = Console.ReadLine();
+            var rawInput = Console.ReadLine() ?? string.Empty;
+
+            // Secret debug key: '#' skips phase 1 and moves to phase 2.
+            if (rawInput.Trim() == "#")
+            {
+                debugSkipToStage2 = true;
+                break;
+            }
 
             // If time expired while waiting for input, break immediately.
             if (s_timeUp)
@@ -169,7 +179,7 @@ class Program
                 break;
             }
 
-            if (!int.TryParse(input, out var selected) || selected < 1 || selected > choiceList.Count)
+            if (!int.TryParse(rawInput, out var selected) || selected < 1 || selected > choiceList.Count)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("Invalid choice — counted as wrong.");
@@ -226,13 +236,15 @@ class Program
             System.Threading.Thread.Sleep(650);
         }
 
-        // Stop the display timer
-        s_displayTimer?.Dispose();
-
+        // Do NOT stop the display timer here — keep it running into stage 2
         Console.ForegroundColor = ConsoleColor.Green;
         if (s_timeUp)
         {
             Console.WriteLine("\nTime is up — the test has ended.");
+        }
+        else if (debugSkipToStage2)
+        {
+            Console.WriteLine("\nSkipping to phase 2 (debug).");
         }
         else
         {
@@ -245,11 +257,382 @@ class Program
                               learnedConjugations.Count, Conjugations.Length,
                               learnedVocab.Count, Vocab.Length);
 
+        // Start second stage: English -> build French sentence
+        RunConstructionStage(rng);
+
+        // Now stop timer after stage 2 completes
+        s_displayTimer?.Dispose();
+
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
     }
 
+    // Stage 2: present an English sentence, the user chooses French tokens one-by-one to build it
+    static void RunConstructionStage(Random rng)
+    {
+        // Build a pool of combined sentences (English / French) using the same components.
+        var sentencePairs = new List<(string Eng, string Fr)>();
+
+        // For "is" starters (0 and 1) use noun-only vocab (no preposition)
+        for (int s = 0; s < WhenPhrases.Length; s++)
+        {
+            if (s == 0 || s == 1) // "Ma pièce préférée est" / "Mon endroit préféré est"
+            {
+                var nouns = Vocab.Where(v => !StartsWithPreposition(v.French)).ToArray();
+                foreach (var n in nouns)
+                {
+                    var fr = $"{WhenPhrases[s].French} {n.French}.";
+                    var en = $"{WhenPhrases[s].English} {n.English}.";
+                    sentencePairs.Add((en, fr));
+                }
+            }
+            else // "J'aime" / "Je n'aime pas" -> need conjugation + preposition vocab
+            {
+                var pres = Vocab.Where(v => StartsWithPreposition(v.French)).ToArray();
+                foreach (var c in Conjugations)
+                {
+                    foreach (var p in pres)
+                    {
+                        var fr = $"{WhenPhrases[s].French} {c.French} {p.French}.";
+                        var en = $"{WhenPhrases[s].English} {c.English} {p.English}.";
+                        sentencePairs.Add((en, fr));
+                    }
+                }
+            }
+        }
+
+        // Shuffle and take a limited number to keep the stage short (adjustable)
+        var pool = sentencePairs.OrderBy(_ => rng.Next()).Take(10).ToList();
+
+        // Build a token pool from components to create distractors
+        var tokenPool = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var w in WhenPhrases) foreach (var t in TokenizeFrench(w.French)) tokenPool.Add(t);
+        foreach (var c in Conjugations) foreach (var t in TokenizeFrench(c.French)) tokenPool.Add(t);
+        foreach (var v in Vocab) foreach (var t in TokenizeFrench(v.French)) tokenPool.Add(t);
+
+        Console.WriteLine();
+        // Use banner/title appropriate for phase 2
+        PrintBanner("French → English sentence builder", "Build the French sentence from the English.");
+        Console.WriteLine("Pick the correct next French word from the choices. Wrong answers are shown and the correct word is inserted so you continue building the sentence.\n");
+
+        foreach (var pair in pool)
+        {
+            // Attempt to reserve a fixed block so the English sentence stays visible and clear any remnants
+            try
+            {
+                Console.Clear();
+                PrintBanner("French → English sentence builder", "Build the French sentence from the English.");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"English: {pair.Eng}");
+                Console.ResetColor();
+
+                // Reserve in-place block lines beneath the English line
+                int blockStart = Console.CursorTop; // first line of the block
+
+                // Tokenize target French sentence (keep last token punctuation-attached)
+                var targetTokens = TokenizeFrench(pair.Fr);
+
+                // Compute reserve lines large enough to avoid remnants; limited by buffer height
+                int maxAvailable = Math.Max(12, Console.BufferHeight - blockStart - 2);
+                int reserveLines = Math.Min(maxAvailable, Math.Max(12, targetTokens.Count * 4 + 6));
+                ClearRegion(blockStart, reserveLines);
+
+                // Now interactive loop updating that block in-place
+                var built = new List<string>();
+                int mistakes = 0;
+
+                for (int pos = 0; pos < targetTokens.Count; pos++)
+                {
+                    var correct = targetTokens[pos];
+
+                    // Prepare choices: correct + 3 distractors
+                    var choices = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { correct };
+                    var attempts = 0;
+                    while (choices.Count < 4 && attempts++ < 200)
+                    {
+                        var pick = tokenPool.ElementAt(rng.Next(tokenPool.Count));
+                        if (string.Equals(pick, correct, StringComparison.OrdinalIgnoreCase)) continue;
+                        choices.Add(pick);
+                    }
+
+                    var choicesList = choices.OrderBy(_ => rng.Next()).ToList();
+
+                    // Update "French so far:" label and built content
+                    Console.SetCursorPosition(0, blockStart + 0);
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.Write("French so far:".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.SetCursorPosition(0, blockStart + 1);
+                    var builtLine = string.Join(" ", built);
+                    Console.Write(builtLine.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.ResetColor();
+
+                    // Clear previous status line
+                    Console.SetCursorPosition(0, blockStart + 2);
+                    Console.Write(new string(' ', Math.Max(1, Console.WindowWidth - 1)));
+
+                    // "Choose next word:" label
+                    Console.SetCursorPosition(0, blockStart + 3);
+                    Console.Write("Choose next word:".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+
+                    // Write choices in reserved lines (blockStart+4 .. +7) — stay inside reserved block
+                    for (int i = 0; i < 4; i++)
+                    {
+                        Console.SetCursorPosition(0, blockStart + 4 + i);
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        var text = $" {i + 1}. {choicesList[i]}";
+                        Console.Write(text.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        Console.ResetColor();
+                    }
+
+                    // Prompt on reserved prompt line
+                    Console.SetCursorPosition(0, blockStart + 8);
+                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.Write("Pick your answer (1-4): ".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.ResetColor();
+
+                    // Move cursor to end of prompt to read input
+                    Console.SetCursorPosition("Pick your answer (1-4): ".Length, blockStart + 8);
+                    var input = Console.ReadLine() ?? string.Empty;
+
+                    if (s_timeUp)
+                    {
+                        // If the timer expired while we're in phase 2, bail out
+                        Console.SetCursorPosition(0, blockStart + 2);
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.Write("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
+                    {
+                        // Invalid: count as wrong, show correct on status line and append
+                        Console.SetCursorPosition(0, blockStart + 2);
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        var msg = "Invalid choice — counted as wrong. Correct word: " + correct;
+                        Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        Console.ResetColor();
+
+                        built.Add(correct);
+                        mistakes++;
+                    }
+                    else if (choicesList[selected - 1] == correct)
+                    {
+                        // Correct
+                        Console.SetCursorPosition(0, blockStart + 2);
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        var msg = "Correct!";
+                        Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        Console.ResetColor();
+
+                        built.Add(correct);
+                    }
+                    else
+                    {
+                        // Wrong
+                        Console.SetCursorPosition(0, blockStart + 2);
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        var msg = $"Wrong — correct: {correct}";
+                        Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        Console.ResetColor();
+
+                        built.Add(correct);
+                        mistakes++;
+                    }
+
+                    // Small pause so user sees status (keeps English visible)
+                    System.Threading.Thread.Sleep(650);
+                }
+
+                // After sentence complete show target and built inside the block below choices (overwrite area)
+                ClearRegion(blockStart, reserveLines);
+                Console.SetCursorPosition(0, blockStart + 0);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                var summary = $"Target French: {pair.Fr}";
+                Console.WriteLine(summary.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                Console.ResetColor();
+
+                Console.WriteLine(("Your built French: " + string.Join(" ", built)).PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                if (mistakes == 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("Perfect — no mistakes.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"{mistakes} mistake(s) — review the sentence above.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                }
+                Console.ResetColor();
+
+                // Prompt for continue, keep English at top
+                Console.WriteLine();
+                Console.WriteLine("Press Enter to continue...");
+                Console.ReadLine();
+
+                // Clear reserved block before next iteration to avoid remnants
+                ClearRegion(blockStart - 1, reserveLines + 2);
+            }
+            catch
+            {
+                // Fallback: if console doesn't support cursor ops, fall back to scrolling behavior
+                // To reduce remnants, print a separator before the content.
+                try
+                {
+                    Console.WriteLine(new string('-', Math.Max(10, Console.WindowWidth)));
+                }
+                catch { /* ignore if WindowWidth not supported */ }
+
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"English: {pair.Eng}");
+                Console.ResetColor();
+
+                // Tokenize target French sentence (keep last token punctuation-attached)
+                var targetTokens = TokenizeFrench(pair.Fr);
+                var built = new List<string>();
+                int mistakes = 0;
+
+                for (int pos = 0; pos < targetTokens.Count; pos++)
+                {
+                    var correct = targetTokens[pos];
+
+                    // Prepare choices: correct + 3 distractors
+                    var choices = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { correct };
+                    var attempts = 0;
+                    while (choices.Count < 4 && attempts++ < 200)
+                    {
+                        var pick = tokenPool.ElementAt(rng.Next(tokenPool.Count));
+                        if (string.Equals(pick, correct, StringComparison.OrdinalIgnoreCase)) continue;
+                        choices.Add(pick);
+                    }
+
+                    var choicesList = choices.OrderBy(_ => rng.Next()).ToList();
+
+                    // Show progress
+                    Console.Write("French so far: ");
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine(string.Join(" ", built));
+                    Console.ResetColor();
+
+                    Console.WriteLine("Choose next word:");
+                    for (int i = 0; i < choicesList.Count; i++)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.Write($" {i + 1}. ");
+                        Console.ResetColor();
+                        Console.WriteLine(choicesList[i]);
+                    }
+
+                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.Write("Pick your answer (1-4): ");
+                    Console.ResetColor();
+                    var input = Console.ReadLine();
+
+                    if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("Invalid choice — counted as wrong.");
+                        Console.ResetColor();
+                        // treat as wrong: show correct and append
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Correct word: {correct}\n");
+                        Console.ResetColor();
+                        built.Add(correct);
+                        mistakes++;
+                    }
+                    else if (choicesList[selected - 1] == correct)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("Correct!\n");
+                        Console.ResetColor();
+                        built.Add(correct);
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Wrong — correct: {correct}\n");
+                        Console.ResetColor();
+                        built.Add(correct);
+                        mistakes++;
+                    }
+                }
+
+                // Completed sentence
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Target French: " + pair.Fr);
+                Console.ResetColor();
+                Console.WriteLine("Your built French: " + string.Join(" ", built));
+                if (mistakes == 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("Perfect — no mistakes.\n");
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"{mistakes} mistake(s) — review the sentence above.\n");
+                }
+                Console.ResetColor();
+
+                Console.WriteLine("Press Enter to continue...");
+                Console.ReadLine();
+                Console.WriteLine();
+            }
+        }
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("Stage 2 complete.\n");
+        Console.ResetColor();
+    }
+
+    static bool StartsWithPreposition(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        var lower = s.ToLowerInvariant();
+        return lower.StartsWith("dans ") || lower.StartsWith("sur ") || lower.StartsWith("au ") || lower.StartsWith("à ") || lower.StartsWith("chez ") || lower.StartsWith("aux ");
+    }
+
+    static List<string> TokenizeFrench(string french)
+    {
+        // Keep tokens as they appear; ensure final period is attached to last token (if present).
+        var trimmed = french.Trim();
+        var hasPeriod = trimmed.EndsWith(".");
+        if (hasPeriod) trimmed = trimmed.Substring(0, trimmed.Length - 1);
+
+        var rawTokens = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (hasPeriod && rawTokens.Count > 0)
+        {
+            rawTokens[rawTokens.Count - 1] = rawTokens[rawTokens.Count - 1] + ".";
+        }
+
+        return rawTokens;
+    }
+
+    // Helper to clear a rectangular region of the console to avoid remnants.
+    static void ClearRegion(int top, int height)
+    {
+        try
+        {
+            var width = Math.Max(1, Console.WindowWidth - 1);
+            for (int i = 0; i < height; i++)
+            {
+                int row = top + i;
+                if (row >= 0 && row < Console.BufferHeight)
+                {
+                    Console.SetCursorPosition(0, row);
+                    Console.Write(new string(' ', width));
+                }
+            }
+        }
+        catch
+        {
+            // If cursor ops fail, ignore — caller should handle fallback.
+        }
+    }
+
     // Draws the screen header + the three progress bars
+    // subtitle parameter allows showing a stage-specific instruction text.
     static void RedrawScreen(int learnedWhen, int totalWhen, int learnedConjugations, int totalConjugations, int learnedVocab, int totalVocab)
     {
         try
@@ -261,7 +644,7 @@ class Program
             // Some hosts (rare) may not support Clear; ignore failures and continue
         }
 
-        PrintBanner();
+        PrintBanner(); // default title/subtitle for stage 1
         DrawComponentProgress(learnedWhen, totalWhen, learnedConjugations, totalConjugations, learnedVocab, totalVocab);
     }
 
@@ -425,14 +808,14 @@ class Program
         Console.Write($"] {learned}/{total}\n");
     }
 
-    static void PrintBanner()
+    static void PrintBanner(string title = "French vocabulary → English multiple choice", string subtitle = "Translate the French item shown into natural English.")
     {
         Console.ForegroundColor = ConsoleColor.Magenta;
         Console.WriteLine("╔════════════════════════════════════════════════╗");
-        Console.WriteLine("║     French vocabulary → English multiple choice ║");
+        Console.WriteLine($"║     {title}".PadRight(46) + "║");
         Console.WriteLine("╚════════════════════════════════════════════════╝");
         Console.ResetColor();
-        Console.WriteLine("Translate the French item shown into natural English.\n");
+        Console.WriteLine(subtitle + "\n");
     }
 
     // Updates the small countdown display in the banner area without disturbing user input (best-effort).
