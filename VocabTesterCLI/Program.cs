@@ -63,10 +63,31 @@ class Program
     static readonly object s_consoleLock = new();
     static System.Threading.Timer? s_displayTimer;
 
+    // Console resize tracking (detect font/zoom changes that adjust WindowWidth/BufferHeight)
+    static volatile int s_lastWindowWidth;
+    static volatile int s_lastBufferHeight;
+    static volatile bool s_layoutDirty;
+
+    // Stage 2 progress tracking
+    static int s_stage2Total = 0;
+    static int s_stage2Completed = 0;
+
     static void Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
         var rng = new Random();
+
+        // Initialize last-known sizes (best-effort)
+        try
+        {
+            s_lastWindowWidth = Console.WindowWidth;
+            s_lastBufferHeight = Console.BufferHeight;
+        }
+        catch
+        {
+            s_lastWindowWidth = 80;
+            s_lastBufferHeight = 25;
+        }
 
         // Start 20-minute timer
         s_endTime = DateTime.UtcNow.AddMinutes(20);
@@ -81,6 +102,9 @@ class Program
                 s_timeUp = true;
                 remaining = TimeSpan.Zero;
             }
+
+            // Also detect console size changes from the background timer and mark layout dirty
+            CheckForResizeAndMark();
 
             UpdateTimerDisplay(remaining);
         }, null, 0, 1000);
@@ -121,6 +145,7 @@ class Program
         RedrawScreen(learnedWhen.Count, WhenPhrases.Length,
                      learnedConjugations.Count, Conjugations.Length,
                      learnedVocab.Count, Vocab.Length);
+        s_layoutDirty = false;
 
         var pool = sentences.OrderBy(_ => rng.Next()).ToList(); // randomized pool to pull from
 
@@ -132,6 +157,12 @@ class Program
                learnedConjugations.Count < Conjugations.Length ||
                learnedVocab.Count < Vocab.Length))
         {
+            // If the console was resized by the user (Ctrl+mousewheel or otherwise),
+            // detect that and redraw the entire screen to avoid cursor-position corruption.
+            CheckForResizeAndClearIfNeeded(learnedWhen.Count, WhenPhrases.Length,
+                                          learnedConjugations.Count, Conjugations.Length,
+                                          learnedVocab.Count, Vocab.Length);
+
             // Always clear and redraw the screen before each question
             RedrawScreen(learnedWhen.Count, WhenPhrases.Length,
                          learnedConjugations.Count, Conjugations.Length,
@@ -266,7 +297,10 @@ class Program
                               learnedVocab.Count, Vocab.Length);
 
         // Start second stage: English -> build French sentence
-        RunConstructionStage(rng);
+        RunConstructionStage(rng,
+            learnedWhen.Count, WhenPhrases.Length,
+            learnedConjugations.Count, Conjugations.Length,
+            learnedVocab.Count, Vocab.Length);
 
         // Now stop timer after stage 2 completes
         s_displayTimer?.Dispose();
@@ -276,7 +310,10 @@ class Program
     }
 
     // Stage 2: present an English sentence, the user chooses French tokens one-by-one to build it
-    static void RunConstructionStage(Random rng)
+    static void RunConstructionStage(Random rng,
+        int learnedWhenCount, int totalWhen,
+        int learnedConjugationsCount, int totalConjugations,
+        int learnedVocabCount, int totalVocab)
     {
         // Build a pool of combined sentences (English / French) using the same components.
         var sentencePairs = new List<(string Eng, string Fr)>();
@@ -312,6 +349,10 @@ class Program
         // Shuffle and take a limited number to keep the stage short (adjustable)
         var pool = sentencePairs.OrderBy(_ => rng.Next()).Take(10).ToList();
 
+        // Set stage 2 totals for progress tracking
+        s_stage2Total = pool.Count;
+        s_stage2Completed = 0;
+
         // Build a token pool from components to create distractors
         var tokenPool = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var w in WhenPhrases) foreach (var t in TokenizeFrench(w.French)) tokenPool.Add(t);
@@ -321,310 +362,389 @@ class Program
         Console.WriteLine();
         // Use banner/title appropriate for phase 2
         PrintBanner("French → English sentence builder", "Build the French sentence.");
+        // Draw phase-1 progress bars plus construction bar (keeps them visible during stage 2)
+        DrawComponentProgress(learnedWhenCount, totalWhen, learnedConjugationsCount, totalConjugations, learnedVocabCount, totalVocab);
         Console.WriteLine("Pick the correct next French word from the choices. Wrong answers require you to try again until you find the correct word.\n");
 
         foreach (var pair in pool)
         {
-            // Attempt to reserve a fixed block so the English sentence stays visible and clear any remnants
-            try
+            // Keep trying the same sentence until it completes or time expires.
+            // This preserves partial progress across console resizes instead of abandoning the question.
+            var targetTokens = TokenizeFrench(pair.Fr);
+            var built = new List<string>();
+            int mistakes = 0;
+
+            while (!s_timeUp && built.Count < targetTokens.Count)
             {
-                Console.Clear();
-                PrintBanner("French → English sentence builder", "Build the French sentence from the English.");
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"English: {pair.Eng}");
-                Console.ResetColor();
-
-                // Reserve in-place block lines beneath the English line
-                int blockStart = Console.CursorTop; // first line of the block
-
-                // Tokenize target French sentence (keep last token punctuation-attached)
-                var targetTokens = TokenizeFrench(pair.Fr);
-
-                // Compute reserve lines large enough to avoid remnants; limited by buffer height
-                int maxAvailable = Math.Max(12, Console.BufferHeight - blockStart - 2);
-                int reserveLines = Math.Min(maxAvailable, Math.Max(12, targetTokens.Count * 4 + 6));
-                ClearRegion(blockStart, reserveLines);
-
-                // Now interactive loop updating that block in-place
-                var built = new List<string>();
-                int mistakes = 0;
-
-                for (int pos = 0; pos < targetTokens.Count; pos++)
+                // If the console was resized while the user was in stage 1 or while attempting this sentence,
+                // ensure we handle it and re-render preserving `built`.
+                CheckForResizeAndMark();
+                if (s_layoutDirty)
                 {
-                    var correct = targetTokens[pos];
+                    try { Console.Clear(); } catch { }
+                    PrintBanner("French → English sentence builder", "Build the French sentence from the English.");
+                    DrawComponentProgress(learnedWhenCount, totalWhen, learnedConjugationsCount, totalConjugations, learnedVocabCount, totalVocab);
+                    s_layoutDirty = false;
+                }
 
-                    // Prepare choices: correct + 3 distractors
-                    var choices = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { correct };
-                    var attempts = 0;
-                    while (choices.Count < 4 && attempts++ < 200)
-                    {
-                        var pick = tokenPool.ElementAt(rng.Next(tokenPool.Count));
-                        if (string.Equals(pick, correct, StringComparison.OrdinalIgnoreCase)) continue;
-                        choices.Add(pick);
-                    }
+                // Attempt to reserve a fixed block so the English sentence stays visible and clear any remnants
+                try
+                {
+                    Console.Clear();
+                    PrintBanner("French → English sentence builder", "Build the French sentence from the English.");
+                    DrawComponentProgress(learnedWhenCount, totalWhen, learnedConjugationsCount, totalConjugations, learnedVocabCount, totalVocab);
 
-                    var choicesList = choices.OrderBy(_ => rng.Next()).ToList();
-
-                    // Update "French so far:" label and built content
-                    Console.SetCursorPosition(0, blockStart + 0);
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.Write("French so far:".PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                    Console.SetCursorPosition(0, blockStart + 1);
-                    var builtLine = string.Join(" ", built);
-                    Console.Write(builtLine.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"English: {pair.Eng}");
                     Console.ResetColor();
 
-                    // Clear previous status line
-                    Console.SetCursorPosition(0, blockStart + 2);
-                    Console.Write(new string(' ', Math.Max(1, Console.WindowWidth - 1)));
+                    // Reserve in-place block lines beneath the English line
+                    int blockStart = Console.CursorTop; // first line of the block
 
-                    // "Choose next word:" label
-                    Console.SetCursorPosition(0, blockStart + 3);
-                    Console.Write("Choose next word:".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    // Compute reserve lines large enough to avoid remnants; limited by buffer height
+                    int maxAvailable = Math.Max(12, Console.BufferHeight - blockStart - 2);
+                    int reserveLines = Math.Min(maxAvailable, Math.Max(12, targetTokens.Count * 4 + 6));
+                    ClearRegion(blockStart, reserveLines);
 
-                    // Write choices in reserved lines (blockStart+4 .. +7) — stay inside reserved block
-                    for (int i = 0; i < 4; i++)
+                    // Resume from where we left off
+                    int pos = built.Count;
+
+                    bool abortedByResize = false;
+                    bool exitedByTime = false;
+
+                    for (; pos < targetTokens.Count; )
                     {
-                        Console.SetCursorPosition(0, blockStart + 4 + i);
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        var text = $" {i + 1}. {choicesList[i]}";
-                        Console.Write(text.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        // If the user has changed console size (zoomed via ctrl+mousewheel), bail out of the in-place flow
+                        // so we can re-reserve using the updated sizes while preserving `built`.
+                        CheckForResizeAndMark();
+                        if (s_layoutDirty)
+                        {
+                            abortedByResize = true;
+                            break; // fall back to outer while to re-render and retry this sentence
+                        }
+
+                        var correct = targetTokens[pos];
+
+                        // Prepare choices: correct + 3 distractors
+                        var choices = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { correct };
+                        var attempts = 0;
+                        while (choices.Count < 4 && attempts++ < 200)
+                        {
+                            var pick = tokenPool.ElementAt(rng.Next(tokenPool.Count));
+                            if (string.Equals(pick, correct, StringComparison.OrdinalIgnoreCase)) continue;
+                            choices.Add(pick);
+                        }
+
+                        var choicesList = choices.OrderBy(_ => rng.Next()).ToList();
+
+                        // Update "French so far:" label and built content
+                        Console.SetCursorPosition(0, blockStart + 0);
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.Write("French so far:".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        Console.SetCursorPosition(0, blockStart + 1);
+                        var builtLine = string.Join(" ", built);
+                        Console.Write(builtLine.PadRight(Math.Max(1, Console.WindowWidth - 1)));
                         Console.ResetColor();
+
+                        // Clear previous status line
+                        Console.SetCursorPosition(0, blockStart + 2);
+                        Console.Write(new string(' ', Math.Max(1, Console.WindowWidth - 1)));
+
+                        // "Choose next word:" label
+                        Console.SetCursorPosition(0, blockStart + 3);
+                        Console.Write("Choose next word:".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+
+                        // Write choices in reserved lines (blockStart+4 .. +7) — stay inside reserved block
+                        for (int i = 0; i < 4; i++)
+                        {
+                            Console.SetCursorPosition(0, blockStart + 4 + i);
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            var text = $" {i + 1}. {choicesList[i]}";
+                            Console.Write(text.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                            Console.ResetColor();
+                        }
+
+                        bool gotCorrect = false;
+
+                        while (!gotCorrect)
+                        {
+                            // Check for resize while waiting for input
+                            CheckForResizeAndMark();
+                            if (s_layoutDirty)
+                            {
+                                // Stop trying to manage fixed positions — outer while will reconstruct layout
+                                abortedByResize = true;
+                                break;
+                            }
+
+                            // Prompt on reserved prompt line
+                            Console.SetCursorPosition(0, blockStart + 8);
+                            Console.ForegroundColor = ConsoleColor.Magenta;
+                            Console.Write("Pick your answer (1-4): ".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                            Console.ResetColor();
+
+                            // Move cursor to end of prompt to read input
+                            Console.SetCursorPosition("Pick your answer (1-4): ".Length, blockStart + 8);
+                            var input = Console.ReadLine() ?? string.Empty;
+
+                            if (s_timeUp)
+                            {
+                                // If the timer expired while we're in phase 2, bail out
+                                Console.SetCursorPosition(0, blockStart + 2);
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.Write("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                                Console.ResetColor();
+                                exitedByTime = true;
+                                break;
+                            }
+
+                            if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
+                            {
+                                // Invalid: count as a mistake, ask to try again
+                                mistakes++;
+                                Console.SetCursorPosition(0, blockStart + 2);
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                var msg = "Invalid choice — try again.";
+                                Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                                Console.ResetColor();
+                                // loop continues: choices remain visible
+                                continue;
+                            }
+
+                            if (choicesList[selected - 1] == correct)
+                            {
+                                // Correct
+                                Console.SetCursorPosition(0, blockStart + 2);
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                var msg = "Correct!";
+                                Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                                Console.ResetColor();
+
+                                built.Add(correct);
+                                gotCorrect = true;
+                                pos++; // advance to next token
+                            }
+                            else
+                            {
+                                // Wrong selection: count and let user try again
+                                mistakes++;
+                                Console.SetCursorPosition(0, blockStart + 2);
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                var msg = "Wrong — try again.";
+                                Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                                Console.ResetColor();
+                                // loop continues so the user can pick again
+                                continue;
+                            }
+                        }
+
+                        if (abortedByResize || exitedByTime) break;
+
+                        // Small pause so user sees status (keeps English visible)
+                        System.Threading.Thread.Sleep(650);
                     }
 
-                    bool exitedByTime = false;
-                    bool gotCorrect = false;
-
-                    while (!gotCorrect)
+                    if (abortedByResize)
                     {
-                        // Prompt on reserved prompt line
-                        Console.SetCursorPosition(0, blockStart + 8);
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.Write("Pick your answer (1-4): ".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        // Preserve `built` and retry the same sentence with a fresh layout in the outer while loop.
+                        s_layoutDirty = false;
+                        ClearRegion(blockStart, reserveLines);
+                        continue;
+                    }
+
+                    if (s_timeUp)
+                    {
+                        // If time expired while inside, stop attempting this sentence
+                        ClearRegion(blockStart, reserveLines);
+                        Console.SetCursorPosition(0, blockStart + 0);
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
                         Console.ResetColor();
+                        break;
+                    }
 
-                        // Move cursor to end of prompt to read input
-                        Console.SetCursorPosition("Pick your answer (1-4): ".Length, blockStart + 8);
-                        var input = Console.ReadLine() ?? string.Empty;
+                    // After sentence complete show only summary (no Target/Your built output)
+                    ClearRegion(blockStart, reserveLines);
+                    Console.SetCursorPosition(0, blockStart + 0);
 
-                        if (s_timeUp)
+                    if (built.Count == targetTokens.Count && built.Count > 0)
+                    {
+                        if (mistakes == 0)
                         {
-                            // If the timer expired while we're in phase 2, bail out
-                            Console.SetCursorPosition(0, blockStart + 2);
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            Console.Write("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                            Console.ResetColor();
-                            exitedByTime = true;
-                            break;
-                        }
-
-                        if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
-                        {
-                            // Invalid: count as a mistake, ask to try again
-                            mistakes++;
-                            Console.SetCursorPosition(0, blockStart + 2);
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            var msg = "Invalid choice — try again.";
-                            Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                            Console.ResetColor();
-                            // loop continues: choices remain visible
-                            continue;
-                        }
-
-                        if (choicesList[selected - 1] == correct)
-                        {
-                            // Correct
-                            Console.SetCursorPosition(0, blockStart + 2);
                             Console.ForegroundColor = ConsoleColor.Green;
-                            var msg = "Correct!";
-                            Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                            Console.ResetColor();
-
-                            built.Add(correct);
-                            gotCorrect = true;
+                            Console.WriteLine("Perfect — no mistakes.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
                         }
                         else
                         {
-                            // Wrong selection: count and let user try again
-                            mistakes++;
-                            Console.SetCursorPosition(0, blockStart + 2);
                             Console.ForegroundColor = ConsoleColor.Red;
-                            var msg = "Wrong — try again.";
-                            Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                            Console.ResetColor();
-                            // loop continues so the user can pick again
-                            continue;
+                            Console.WriteLine($"{mistakes} mistake(s) — review the sentence above.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
                         }
-                    }
-
-                    if (exitedByTime) break;
-
-                    // Small pause so user sees status (keeps English visible)
-                    System.Threading.Thread.Sleep(650);
-                }
-
-                // After sentence complete show only summary (no Target/Your built output)
-                ClearRegion(blockStart, reserveLines);
-                Console.SetCursorPosition(0, blockStart + 0);
-
-                if (s_timeUp)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                    Console.ResetColor();
-                }
-                else if (built.Count == targetTokens.Count && built.Count > 0)
-                {
-                    if (built.SequenceEqual(targetTokens))
-                    {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("Perfect — no mistakes.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        Console.ResetColor();
                     }
                     else
                     {
-                        // number of mistakes tracked during attempts
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"{(targetTokens.Count > 0 ? 0 : 0)} mistake(s) — review the sentence above.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        // If we left early due to time or similar
+                        Console.WriteLine();
                     }
-                    Console.ResetColor();
-                }
-                else
-                {
-                    // If we left early due to time or similar
+
+                    // Update stage 2 progress if sentence completed
+                    if (built.Count == targetTokens.Count)
+                    {
+                        s_stage2Completed = Math.Min(s_stage2Total, s_stage2Completed + 1);
+                    }
+
+                    // Redraw the progress bars with updated construction progress
+                    DrawComponentProgress(learnedWhenCount, totalWhen, learnedConjugationsCount, totalConjugations, learnedVocabCount, totalVocab);
+
+                    // Prompt for continue, keep English at top
                     Console.WriteLine();
+                    Console.WriteLine("Press Enter to continue...");
+                    Console.ReadLine();
+
+                    // Clear reserved block before next iteration to avoid remnants
+                    ClearRegion(blockStart - 1, reserveLines + 2);
+
+                    // Sentence finished; break outer while to move to next pair
+                    break;
                 }
-
-                // Prompt for continue, keep English at top
-                Console.WriteLine();
-                Console.WriteLine("Press Enter to continue...");
-                Console.ReadLine();
-
-                // Clear reserved block before next iteration to avoid remnants
-                ClearRegion(blockStart - 1, reserveLines + 2);
-            }
-            catch
-            {
-                // Fallback: if console doesn't support cursor ops, fall back to scrolling behavior
-                // To reduce remnants, print a separator before the content.
-                try
+                catch
                 {
-                    Console.WriteLine(new string('-', Math.Max(10, Console.WindowWidth)));
-                }
-                catch { /* ignore if WindowWidth not supported */ }
-
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"English: {pair.Eng}");
-                Console.ResetColor();
-
-                // Tokenize target French sentence (keep last token punctuation-attached)
-                var targetTokens = TokenizeFrench(pair.Fr);
-                var built = new List<string>();
-                int mistakes = 0;
-                bool exitedByTime = false;
-
-                for (int pos = 0; pos < targetTokens.Count; pos++)
-                {
-                    var correct = targetTokens[pos];
-
-                    // Prepare choices: correct + 3 distractors
-                    var choices = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { correct };
-                    var attempts = 0;
-                    while (choices.Count < 4 && attempts++ < 200)
+                    // Fallback: if console doesn't support cursor ops, fall back to scrolling behavior
+                    // To reduce remnants, print a separator before the content.
+                    try
                     {
-                        var pick = tokenPool.ElementAt(rng.Next(tokenPool.Count));
-                        if (string.Equals(pick, correct, StringComparison.OrdinalIgnoreCase)) continue;
-                        choices.Add(pick);
+                        Console.WriteLine(new string('-', Math.Max(10, Console.WindowWidth)));
                     }
+                    catch { /* ignore if WindowWidth not supported */ }
 
-                    var choicesList = choices.OrderBy(_ => rng.Next()).ToList();
-
-                    bool gotCorrect = false;
-                    while (!gotCorrect)
-                    {
-                        // Show progress
-                        Console.Write("French so far: ");
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine(string.Join(" ", built));
-                        Console.ResetColor();
-
-                        Console.WriteLine("Choose next word:");
-                        for (int i = 0; i < choicesList.Count; i++)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.Write($" {i + 1}. ");
-                            Console.ResetColor();
-                            Console.WriteLine(choicesList[i]);
-                        }
-
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.Write("Pick your answer (1-4): ");
-                        Console.ResetColor();
-                        var input = Console.ReadLine();
-
-                        if (s_timeUp)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine("Time expired — returning to main menu.");
-                            Console.ResetColor();
-                            exitedByTime = true;
-                            break;
-                        }
-
-                        if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine("Invalid choice — try again.");
-                            Console.ResetColor();
-                            mistakes++;
-                            // loop continues
-                            continue;
-                        }
-
-                        if (choicesList[selected - 1] == correct)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine("Correct!\n");
-                            Console.ResetColor();
-                            built.Add(correct);
-                            gotCorrect = true;
-                        }
-                        else
-                        {
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine("Wrong — try again.\n");
-                            Console.ResetColor();
-                            mistakes++;
-                            // loop continues
-                        }
-                    }
-
-                    if (exitedByTime) break;
-                }
-
-                // Completed sentence — do NOT print Target/Your built per user request
-                Console.WriteLine();
-                if (s_timeUp)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Time expired — returning to main menu.\n");
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"English: {pair.Eng}");
                     Console.ResetColor();
-                }
-                else if (mistakes == 0)
-                {
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("Perfect — no mistakes.\n");
-                }
-                else
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"{mistakes} mistake(s) — review the sentence above.\n");
-                }
-                Console.ResetColor();
 
-                Console.WriteLine("Press Enter to continue...");
-                Console.ReadLine();
-                Console.WriteLine();
+                    // Tokenize target French sentence (keep last token punctuation-attached)
+                    var fallbackTargetTokens = TokenizeFrench(pair.Fr);
+                    bool fallbackExitedByTime = false;
+
+                    for (int pos = built.Count; pos < fallbackTargetTokens.Count; pos++)
+                    {
+                        var correct = fallbackTargetTokens[pos];
+
+                        // Prepare choices: correct + 3 distractors
+                        var choices = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { correct };
+                        var attempts = 0;
+                        while (choices.Count < 4 && attempts++ < 200)
+                        {
+                            var pick = tokenPool.ElementAt(rng.Next(tokenPool.Count));
+                            if (string.Equals(pick, correct, StringComparison.OrdinalIgnoreCase)) continue;
+                            choices.Add(pick);
+                        }
+
+                        var choicesList = choices.OrderBy(_ => rng.Next()).ToList();
+
+                        bool gotCorrect = false;
+                        while (!gotCorrect)
+                        {
+                            // Show progress
+                            Console.Write("French so far: ");
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine(string.Join(" ", built));
+                            Console.ResetColor();
+
+                            Console.WriteLine("Choose next word:");
+                            for (int i = 0; i < choicesList.Count; i++)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                Console.Write($" {i + 1}. ");
+                                Console.ResetColor();
+                                Console.WriteLine(choicesList[i]);
+                            }
+
+                            Console.ForegroundColor = ConsoleColor.Magenta;
+                            Console.Write("Pick your answer (1-4): ");
+                            Console.ResetColor();
+                            var input = Console.ReadLine();
+
+                            if (s_timeUp)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine("Time expired — returning to main menu.");
+                                Console.ResetColor();
+                                fallbackExitedByTime = true;
+                                break;
+                            }
+
+                            if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine("Invalid choice — try again.");
+                                Console.ResetColor();
+                                mistakes++;
+                                // loop continues
+                                continue;
+                            }
+
+                            if (choicesList[selected - 1] == correct)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                Console.WriteLine("Correct!\n");
+                                Console.ResetColor();
+                                built.Add(correct);
+                                gotCorrect = true;
+                            }
+                            else
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine("Wrong — try again.\n");
+                                Console.ResetColor();
+                                mistakes++;
+                                // loop continues
+                            }
+                        }
+
+                        if (fallbackExitedByTime) break;
+                    }
+
+                    // Completed sentence — do NOT print Target/Your built per user request
+                    Console.WriteLine();
+                    if (s_timeUp)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("Time expired — returning to main menu.\n");
+                        Console.ResetColor();
+                    }
+                    else if (built.Count == fallbackTargetTokens.Count && mistakes == 0)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("Perfect — no mistakes.\n");
+                        Console.ResetColor();
+                    }
+                    else if (built.Count == fallbackTargetTokens.Count)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"{mistakes} mistake(s) — review the sentence above.\n");
+                        Console.ResetColor();
+                    }
+
+                    // Update stage 2 progress if sentence completed (fallback)
+                    if (built.Count == fallbackTargetTokens.Count)
+                    {
+                        s_stage2Completed = Math.Min(s_stage2Total, s_stage2Completed + 1);
+                    }
+
+                    // Redraw the progress bars with updated construction progress
+                    DrawComponentProgress(learnedWhenCount, totalWhen, learnedConjugationsCount, totalConjugations, learnedVocabCount, totalVocab);
+
+                    Console.WriteLine("Press Enter to continue...");
+                    Console.ReadLine();
+                    Console.WriteLine();
+
+                    // In fallback mode we finished the sentence; break outer while to move to next pair
+                    break;
+                }
             }
+
+            // Update the visible progress bars after each sentence attempt
+            DrawComponentProgress(learnedWhenCount, totalWhen, learnedConjugationsCount, totalConjugations, learnedVocabCount, totalVocab);
         }
 
         Console.ForegroundColor = ConsoleColor.Cyan;
@@ -811,11 +931,15 @@ class Program
 
     static void DrawComponentProgress(int learnedWhen, int totalWhen, int learnedConjugations, int totalConjugations, int learnedVocab, int totalVocab)
     {
-        // Render three ASCII progress bars (Starters / Conjugations / Vocabulary)
+        // Render three ASCII progress bars (Starters / Conjugations / Vocabulary) plus Construction
         Console.WriteLine();
         DrawProgressBar("Starters:", learnedWhen, totalWhen, 24);
         DrawProgressBar("Conjugations:",  learnedConjugations, totalConjugations, 24);
         DrawProgressBar("Vocabulary:",   learnedVocab,  totalVocab,  24);
+
+        // Construction progress (stage 2). Uses shared static counters set in RunConstructionStage.
+        DrawProgressBar("Construction:", s_stage2Completed, s_stage2Total, 24);
+
         Console.WriteLine();
     }
 
@@ -899,6 +1023,41 @@ class Program
             catch
             {
                 // If console does not support cursor ops in this host, ignore silently.
+            }
+        }
+    }
+
+    // If a resize is detected, mark layout dirty so the main thread can clear/redraw safely.
+    static void CheckForResizeAndMark()
+    {
+        try
+        {
+            int w = Console.WindowWidth;
+            int bh = Console.BufferHeight;
+            if (w != s_lastWindowWidth || bh != s_lastBufferHeight)
+            {
+                s_lastWindowWidth = w;
+                s_lastBufferHeight = bh;
+                s_layoutDirty = true;
+            }
+        }
+        catch
+        {
+            // ignore failures reading sizes
+        }
+    }
+
+    // Called from main loop to clear and redraw if layout changed
+    static void CheckForResizeAndClearIfNeeded(int learnedWhen, int totalWhen, int learnedConjugations, int totalConjugations, int learnedVocab, int totalVocab)
+    {
+        CheckForResizeAndMark();
+        if (s_layoutDirty)
+        {
+            lock (s_consoleLock)
+            {
+                try { Console.Clear(); } catch { }
+                RedrawScreen(learnedWhen, totalWhen, learnedConjugations, totalConjugations, learnedVocab, totalVocab);
+                s_layoutDirty = false;
             }
         }
     }
