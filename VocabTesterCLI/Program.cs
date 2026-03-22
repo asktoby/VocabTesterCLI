@@ -90,7 +90,7 @@ class Program
         // tuple: french, english, whenIdx, conjugationIdx, vocabIdx
         var sentences = new List<(string French, string English, int whenIdx, int conjugationIdx, int vocabIdx)>();
 
-        // When / sentence-starter entries
+        // Starters / sentence-starter entries
         for (int wi = 0; wi < WhenPhrases.Length; wi++)
         {
             var w = WhenPhrases[wi];
@@ -144,6 +144,14 @@ class Program
 
             if (candidate.Equals(default))
             {
+                // If somehow all items are learned, break to avoid infinite loop
+                if (learnedWhen.Count == WhenPhrases.Length &&
+                    learnedConjugations.Count == Conjugations.Length &&
+                    learnedVocab.Count == Vocab.Length)
+                {
+                    break;
+                }
+
                 candidate = pool[rng.Next(pool.Count)];
             }
 
@@ -312,8 +320,8 @@ class Program
 
         Console.WriteLine();
         // Use banner/title appropriate for phase 2
-        PrintBanner("French → English sentence builder", "Build the French sentence from the English.");
-        Console.WriteLine("Pick the correct next French word from the choices. Wrong answers are shown and the correct word is inserted so you continue building the sentence.\n");
+        PrintBanner("French → English sentence builder", "Build the French sentence.");
+        Console.WriteLine("Pick the correct next French word from the choices. Wrong answers require you to try again until you find the correct word.\n");
 
         foreach (var pair in pool)
         {
@@ -384,86 +392,107 @@ class Program
                         Console.ResetColor();
                     }
 
-                    // Prompt on reserved prompt line
-                    Console.SetCursorPosition(0, blockStart + 8);
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.Write("Pick your answer (1-4): ".PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                    Console.ResetColor();
+                    bool exitedByTime = false;
+                    bool gotCorrect = false;
 
-                    // Move cursor to end of prompt to read input
-                    Console.SetCursorPosition("Pick your answer (1-4): ".Length, blockStart + 8);
-                    var input = Console.ReadLine() ?? string.Empty;
-
-                    if (s_timeUp)
+                    while (!gotCorrect)
                     {
-                        // If the timer expired while we're in phase 2, bail out
-                        Console.SetCursorPosition(0, blockStart + 2);
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.Write("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                        Console.ResetColor();
-                        break;
-                    }
-
-                    if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
-                    {
-                        // Invalid: count as wrong, show correct on status line and append
-                        Console.SetCursorPosition(0, blockStart + 2);
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        var msg = "Invalid choice — counted as wrong. Correct word: " + correct;
-                        Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                        // Prompt on reserved prompt line
+                        Console.SetCursorPosition(0, blockStart + 8);
+                        Console.ForegroundColor = ConsoleColor.Magenta;
+                        Console.Write("Pick your answer (1-4): ".PadRight(Math.Max(1, Console.WindowWidth - 1)));
                         Console.ResetColor();
 
-                        built.Add(correct);
-                        mistakes++;
-                    }
-                    else if (choicesList[selected - 1] == correct)
-                    {
-                        // Correct
-                        Console.SetCursorPosition(0, blockStart + 2);
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        var msg = "Correct!";
-                        Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                        Console.ResetColor();
+                        // Move cursor to end of prompt to read input
+                        Console.SetCursorPosition("Pick your answer (1-4): ".Length, blockStart + 8);
+                        var input = Console.ReadLine() ?? string.Empty;
 
-                        built.Add(correct);
-                    }
-                    else
-                    {
-                        // Wrong
-                        Console.SetCursorPosition(0, blockStart + 2);
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        var msg = $"Wrong — correct: {correct}";
-                        Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                        Console.ResetColor();
+                        if (s_timeUp)
+                        {
+                            // If the timer expired while we're in phase 2, bail out
+                            Console.SetCursorPosition(0, blockStart + 2);
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.Write("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                            Console.ResetColor();
+                            exitedByTime = true;
+                            break;
+                        }
 
-                        built.Add(correct);
-                        mistakes++;
+                        if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
+                        {
+                            // Invalid: count as a mistake, ask to try again
+                            mistakes++;
+                            Console.SetCursorPosition(0, blockStart + 2);
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            var msg = "Invalid choice — try again.";
+                            Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                            Console.ResetColor();
+                            // loop continues: choices remain visible
+                            continue;
+                        }
+
+                        if (choicesList[selected - 1] == correct)
+                        {
+                            // Correct
+                            Console.SetCursorPosition(0, blockStart + 2);
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            var msg = "Correct!";
+                            Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                            Console.ResetColor();
+
+                            built.Add(correct);
+                            gotCorrect = true;
+                        }
+                        else
+                        {
+                            // Wrong selection: count and let user try again
+                            mistakes++;
+                            Console.SetCursorPosition(0, blockStart + 2);
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            var msg = "Wrong — try again.";
+                            Console.Write(msg.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                            Console.ResetColor();
+                            // loop continues so the user can pick again
+                            continue;
+                        }
                     }
+
+                    if (exitedByTime) break;
 
                     // Small pause so user sees status (keeps English visible)
                     System.Threading.Thread.Sleep(650);
                 }
 
-                // After sentence complete show target and built inside the block below choices (overwrite area)
+                // After sentence complete show only summary (no Target/Your built output)
                 ClearRegion(blockStart, reserveLines);
                 Console.SetCursorPosition(0, blockStart + 0);
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                var summary = $"Target French: {pair.Fr}";
-                Console.WriteLine(summary.PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                Console.ResetColor();
 
-                Console.WriteLine(("Your built French: " + string.Join(" ", built)).PadRight(Math.Max(1, Console.WindowWidth - 1)));
-                if (mistakes == 0)
+                if (s_timeUp)
                 {
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("Perfect — no mistakes.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Time expired — returning to main menu.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.ResetColor();
+                }
+                else if (built.Count == targetTokens.Count && built.Count > 0)
+                {
+                    if (built.SequenceEqual(targetTokens))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("Perfect — no mistakes.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    }
+                    else
+                    {
+                        // number of mistakes tracked during attempts
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"{(targetTokens.Count > 0 ? 0 : 0)} mistake(s) — review the sentence above.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    }
+                    Console.ResetColor();
                 }
                 else
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"{mistakes} mistake(s) — review the sentence above.".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    // If we left early due to time or similar
+                    Console.WriteLine();
                 }
-                Console.ResetColor();
 
                 // Prompt for continue, keep English at top
                 Console.WriteLine();
@@ -491,6 +520,7 @@ class Program
                 var targetTokens = TokenizeFrench(pair.Fr);
                 var built = new List<string>();
                 int mistakes = 0;
+                bool exitedByTime = false;
 
                 for (int pos = 0; pos < targetTokens.Count; pos++)
                 {
@@ -508,62 +538,78 @@ class Program
 
                     var choicesList = choices.OrderBy(_ => rng.Next()).ToList();
 
-                    // Show progress
-                    Console.Write("French so far: ");
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine(string.Join(" ", built));
-                    Console.ResetColor();
-
-                    Console.WriteLine("Choose next word:");
-                    for (int i = 0; i < choicesList.Count; i++)
+                    bool gotCorrect = false;
+                    while (!gotCorrect)
                     {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.Write($" {i + 1}. ");
-                        Console.ResetColor();
-                        Console.WriteLine(choicesList[i]);
-                    }
-
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.Write("Pick your answer (1-4): ");
-                    Console.ResetColor();
-                    var input = Console.ReadLine();
-
-                    if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("Invalid choice — counted as wrong.");
-                        Console.ResetColor();
-                        // treat as wrong: show correct and append
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"Correct word: {correct}\n");
-                        Console.ResetColor();
-                        built.Add(correct);
-                        mistakes++;
-                    }
-                    else if (choicesList[selected - 1] == correct)
-                    {
+                        // Show progress
+                        Console.Write("French so far: ");
                         Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("Correct!\n");
+                        Console.WriteLine(string.Join(" ", built));
                         Console.ResetColor();
-                        built.Add(correct);
-                    }
-                    else
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"Wrong — correct: {correct}\n");
+
+                        Console.WriteLine("Choose next word:");
+                        for (int i = 0; i < choicesList.Count; i++)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.Write($" {i + 1}. ");
+                            Console.ResetColor();
+                            Console.WriteLine(choicesList[i]);
+                        }
+
+                        Console.ForegroundColor = ConsoleColor.Magenta;
+                        Console.Write("Pick your answer (1-4): ");
                         Console.ResetColor();
-                        built.Add(correct);
-                        mistakes++;
+                        var input = Console.ReadLine();
+
+                        if (s_timeUp)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("Time expired — returning to main menu.");
+                            Console.ResetColor();
+                            exitedByTime = true;
+                            break;
+                        }
+
+                        if (!int.TryParse(input, out var selected) || selected < 1 || selected > choicesList.Count)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("Invalid choice — try again.");
+                            Console.ResetColor();
+                            mistakes++;
+                            // loop continues
+                            continue;
+                        }
+
+                        if (choicesList[selected - 1] == correct)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine("Correct!\n");
+                            Console.ResetColor();
+                            built.Add(correct);
+                            gotCorrect = true;
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("Wrong — try again.\n");
+                            Console.ResetColor();
+                            mistakes++;
+                            // loop continues
+                        }
                     }
+
+                    if (exitedByTime) break;
                 }
 
-                // Completed sentence
+                // Completed sentence — do NOT print Target/Your built per user request
                 Console.WriteLine();
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("Target French: " + pair.Fr);
-                Console.ResetColor();
-                Console.WriteLine("Your built French: " + string.Join(" ", built));
-                if (mistakes == 0)
+                if (s_timeUp)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Time expired — returning to main menu.\n");
+                    Console.ResetColor();
+                }
+                else if (mistakes == 0)
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine("Perfect — no mistakes.\n");
@@ -765,9 +811,9 @@ class Program
 
     static void DrawComponentProgress(int learnedWhen, int totalWhen, int learnedConjugations, int totalConjugations, int learnedVocab, int totalVocab)
     {
-        // Render three ASCII progress bars (When / Conjugations / Vocabulary)
+        // Render three ASCII progress bars (Starters / Conjugations / Vocabulary)
         Console.WriteLine();
-        DrawProgressBar("When:", learnedWhen, totalWhen, 24);
+        DrawProgressBar("Starters:", learnedWhen, totalWhen, 24);
         DrawProgressBar("Conjugations:",  learnedConjugations, totalConjugations, 24);
         DrawProgressBar("Vocabulary:",   learnedVocab,  totalVocab,  24);
         Console.WriteLine();
